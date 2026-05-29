@@ -4,6 +4,17 @@ import { z } from "zod";
  * Zentrale, validierte Environment-Konfiguration.
  * Trennt bewusst öffentliche (Client) von server-only Variablen.
  * Server-only Werte werden NIE im Client-Bundle referenziert.
+ *
+ * Wichtig: Die Auflösung erfolgt LAZY und wirft beim Build NICHT hart.
+ * Next.js evaluiert Module bereits beim `next build` (Prerendering). Würde hier
+ * direkt `parse()` laufen, bräche der Build ab, sobald die Variablen (z. B. auf
+ * Vercel) noch nicht gesetzt sind. Stattdessen: validieren, bei Fehlern warnen
+ * und Best-Effort-Werte liefern – der echte Fehler tritt dann klar zur Laufzeit
+ * auf (z. B. wenn der Supabase-Client tatsächlich verwendet wird).
+ *
+ * NEXT_PUBLIC_*-Variablen werden von Next zur Build-Zeit ins Bundle inlined;
+ * sie müssen daher in Vercel VOR dem Build gesetzt sein, damit der Client sie
+ * zur Laufzeit kennt.
  */
 
 const publicSchema = z.object({
@@ -20,14 +31,64 @@ const serverSchema = z.object({
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
 });
 
-export const publicEnv = publicSchema.parse({
-  NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
-});
+type PublicEnv = z.infer<typeof publicSchema>;
+
+let cachedPublic: PublicEnv | null = null;
+
+function resolvePublicEnv(): PublicEnv {
+  if (cachedPublic) return cachedPublic;
+
+  const raw = {
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  };
+
+  const parsed = publicSchema.safeParse(raw);
+  if (parsed.success) {
+    cachedPublic = parsed.data;
+    return cachedPublic;
+  }
+
+  // Kein harter Crash: warnen und Best-Effort-Werte liefern. Der Supabase-
+  // Client schlägt dann zur Laufzeit mit einer klaren Meldung fehl, falls die
+  // Werte wirklich fehlen – statt den gesamten Build zu blockieren.
+  if (process.env.NODE_ENV !== "production" || typeof window === "undefined") {
+    console.warn(
+      "[env] NEXT_PUBLIC_* Variablen fehlen oder sind ungültig. " +
+        "In Vercel unter Project Settings → Environment Variables setzen. " +
+        parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
+    );
+  }
+
+  cachedPublic = {
+    NEXT_PUBLIC_SUPABASE_URL: raw.NEXT_PUBLIC_SUPABASE_URL ?? "",
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: raw.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "",
+    NEXT_PUBLIC_APP_URL: raw.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
+  };
+  return cachedPublic;
+}
+
+/**
+ * Öffentliche Env-Variablen. Lazy über Getter aufgelöst, damit der Import nie
+ * den Build crasht. API bleibt wie ein einfaches Objekt nutzbar.
+ */
+export const publicEnv: PublicEnv = {
+  get NEXT_PUBLIC_SUPABASE_URL() {
+    return resolvePublicEnv().NEXT_PUBLIC_SUPABASE_URL;
+  },
+  get NEXT_PUBLIC_SUPABASE_ANON_KEY() {
+    return resolvePublicEnv().NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  },
+  get NEXT_PUBLIC_APP_URL() {
+    return resolvePublicEnv().NEXT_PUBLIC_APP_URL;
+  },
+};
 
 /**
  * Server-Env nur lazy auf dem Server auflösen, damit es nie im Client landet.
+ * Wirft bewusst, wenn der zwingend benötigte Service-Role-Key fehlt – wird aber
+ * nur in serverseitigen Pfaden zur Laufzeit aufgerufen, nicht beim Build.
  */
 export function getServerEnv() {
   if (typeof window !== "undefined") {
@@ -36,8 +97,8 @@ export function getServerEnv() {
   return serverSchema.parse({
     SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
-    RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
     RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
   });
 }
