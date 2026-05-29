@@ -72,20 +72,23 @@ export async function listUsers(): Promise<ManagedUser[]> {
     .from("user_roles")
     .select("id, profile_id, location_id, roles(key, name), locations(name)");
 
-  // MFA-Status je User über Admin-API (auth-Schema).
+  // MFA-Status je User zuverlässig über die Admin-MFA-API ermitteln.
+  // (Das factors-Feld aus listUsers() ist nicht verlässlich befüllt.)
   const admin = createAdminClient();
   const mfaByUser = new Map<string, boolean>();
-  try {
-    const { data: list } = await admin.auth.admin.listUsers();
-    for (const u of list?.users ?? []) {
-      const factors = (u.factors ?? []).filter(
-        (f) => f.status === "verified",
-      );
-      mfaByUser.set(u.id, factors.length > 0);
-    }
-  } catch {
-    // MFA-Status ist informativ – Liste darf auch ohne ihn funktionieren.
-  }
+  await Promise.all(
+    (profiles ?? []).map(async (p) => {
+      try {
+        const { data } = await admin.auth.admin.mfa.listFactors({ userId: p.id });
+        const verified = (data?.factors ?? []).filter(
+          (f) => f.status === "verified",
+        );
+        mfaByUser.set(p.id, verified.length > 0);
+      } catch {
+        mfaByUser.set(p.id, false);
+      }
+    }),
+  );
 
   return (profiles ?? []).map((p) => {
     const roles: ManagedRole[] = (roleRows ?? [])

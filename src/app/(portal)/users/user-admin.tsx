@@ -253,30 +253,29 @@ function UserRow({
                 {user.isActive ? "Deaktivieren" : "Aktivieren"}
               </button>
             </form>
-            {user.mfaEnabled && (
-              <form
-                action={mfaAction}
-                onSubmit={(e) => {
-                  if (
-                    !confirm(
-                      `2FA von ${user.email} wirklich zurücksetzen? Der Mitarbeiter muss beim nächsten Login neu einrichten.`,
-                    )
-                  ) {
-                    e.preventDefault();
-                  }
-                }}
+            <form
+              action={mfaAction}
+              onSubmit={(e) => {
+                if (
+                  !confirm(
+                    `2FA von ${user.email} wirklich zurücksetzen? Der Mitarbeiter muss beim nächsten Login neu einrichten.`,
+                  )
+                ) {
+                  e.preventDefault();
+                }
+              }}
+            >
+              <input type="hidden" name="profileId" value={user.profileId} />
+              <button
+                type="submit"
+                disabled={mfaPending}
+                title="2FA zurücksetzen"
+                className="flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs text-amber-600 transition hover:bg-amber-500/10 disabled:opacity-60 dark:text-amber-400"
               >
-                <input type="hidden" name="profileId" value={user.profileId} />
-                <button
-                  type="submit"
-                  disabled={mfaPending}
-                  title="2FA zurücksetzen"
-                  className="flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs text-amber-600 transition hover:bg-amber-500/10 disabled:opacity-60 dark:text-amber-400"
-                >
-                  <KeyRound className="h-3.5 w-3.5" /> 2FA reset
-                </button>
-              </form>
-            )}
+                <KeyRound className="h-3.5 w-3.5" />
+                {mfaPending ? "Reset…" : "2FA reset"}
+              </button>
+            </form>
           </div>
         )}
       </div>
