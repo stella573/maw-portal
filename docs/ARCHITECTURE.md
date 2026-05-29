@@ -218,7 +218,7 @@ Leitlinien:
 6. **Service-Role:** umgeht RLS – wird nur in `lib/supabase/admin` für klar
    abgegrenzte Operationen (Inbound-Webhook, System-Jobs) verwendet.
 
-Die konkreten Policies liegen in `supabase/migrations/0006_rls.sql`.
+Die konkreten Policies liegen in `supabase/migrations/0005_rls.sql`.
 
 ---
 
