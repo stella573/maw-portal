@@ -278,8 +278,20 @@ export interface Database {
           ip: string | null;
           created_at: string;
         };
-        Insert: never; // nur über public.log_audit() schreiben
-        Update: never;
+        // Direkte Inserts/Updates sind per RLS gesperrt – ausschließlich über
+        // public.log_audit() schreiben. Der Typ beschreibt die Spalten nur
+        // der Vollständigkeit halber.
+        Insert: {
+          id?: string;
+          actor_profile_id?: string | null;
+          action: AuditAction;
+          entity_type?: string | null;
+          entity_id?: string | null;
+          location_id?: string | null;
+          metadata?: Record<string, unknown>;
+          ip?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["audit_logs"]["Insert"]>;
         Relationships: [];
       };
     };
