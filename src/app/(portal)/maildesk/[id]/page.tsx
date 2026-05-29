@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTicketDetail } from "@/modules/maildesk/services/ticket-detail";
+import { getCurrentUser } from "@/services/auth/current-user";
+import { isOwnerOrAdmin } from "@/lib/auth/permissions";
 import { TicketView } from "./ticket-view";
 
 /**
@@ -12,8 +14,11 @@ export default async function TicketPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const ticket = await getTicketDetail(id);
+  const [ticket, ctx] = await Promise.all([
+    getTicketDetail(id),
+    getCurrentUser(),
+  ]);
   if (!ticket) notFound();
 
-  return <TicketView ticket={ticket} />;
+  return <TicketView ticket={ticket} showDiagnostics={isOwnerOrAdmin(ctx)} />;
 }

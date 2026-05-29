@@ -11,7 +11,13 @@ import {
 import type { TicketStatus, TicketPriority } from "@/types/database";
 import type { TicketDetail } from "@/modules/maildesk/services/ticket-detail";
 
-export function TicketView({ ticket }: { ticket: TicketDetail }) {
+export function TicketView({
+  ticket,
+  showDiagnostics = false,
+}: {
+  ticket: TicketDetail;
+  showDiagnostics?: boolean;
+}) {
   return (
     <div>
       <Link
@@ -57,6 +63,18 @@ export function TicketView({ ticket }: { ticket: TicketDetail }) {
                   <span>{formatDateTime(m.createdAt)}</span>
                 </div>
                 <MessageBody text={m.bodyText} html={m.bodyHtml} />
+                {showDiagnostics &&
+                  m.direction === "inbound" &&
+                  m.raw != null && (
+                    <details className="mt-3 text-xs">
+                      <summary className="cursor-pointer text-[var(--muted)]">
+                        Diagnose: Rohdaten der eingegangenen Mail
+                      </summary>
+                      <pre className="mt-2 max-h-72 overflow-auto rounded-lg bg-[var(--background)] p-3 text-[11px] leading-relaxed">
+                        {JSON.stringify(m.raw, null, 2)}
+                      </pre>
+                    </details>
+                  )}
               </div>
             ))}
           </div>

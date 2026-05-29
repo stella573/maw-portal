@@ -16,6 +16,8 @@ export interface TicketDetailMessage {
   isDraft: boolean;
   createdAt: string;
   authorName: string | null;
+  /** Roh-Payload des eingehenden Webhooks (nur für Diagnose, Owner/Admin). */
+  raw: unknown;
 }
 
 export interface TicketDetailNote {
@@ -62,7 +64,7 @@ export async function getTicketDetail(
   const { data: messages } = await supabase
     .from("messages")
     .select(
-      "id, direction, from_email, to_email, body_text, body_html, is_draft, created_at, profiles(full_name)",
+      "id, direction, from_email, to_email, body_text, body_html, is_draft, created_at, raw, profiles(full_name)",
     )
     .eq("ticket_id", ticketId)
     .order("created_at", { ascending: true });
@@ -102,6 +104,7 @@ export async function getTicketDetail(
         isDraft: m.is_draft,
         createdAt: m.created_at,
         authorName: author?.full_name ?? null,
+        raw: m.raw ?? null,
       };
     }),
     notes: (notes ?? []).map((n) => {
