@@ -12,6 +12,10 @@ import { logAudit } from "@/lib/audit/log";
  * Sicherheits-Pipeline: Auth → Validierung → Permission (tickets.reply am
  * Ticket-Standort) → Versand → Nachricht speichern → Audit.
  *
+ * Absenderadresse = Adresse des Postfachs (pro Postfach), Fallback auf die
+ * globale RESEND_FROM_EMAIL. Die Ticket-Referenz wird in den Betreff gesetzt,
+ * damit eingehende Antworten dem Ticket zugeordnet werden (Threading).
+ *
  * KI-Vorschläge werden NIE automatisch versendet – dieser Endpunkt wird nur
  * durch eine bewusste Nutzeraktion ausgelöst.
  */
@@ -20,11 +24,15 @@ export const runtime = "nodejs";
 
 const bodySchema = z.object({
   ticketId: z.string().uuid(),
-  to: z.string().email(),
-  subject: z.string().min(1),
   bodyText: z.string().min(1),
-  bodyHtml: z.string().optional(),
 });
+
+/** Stellt sicher, dass die Ticket-Referenz im Betreff steht (Threading). */
+function subjectWithReference(subject: string, reference: string): string {
+  if (subject.includes(reference)) return subject;
+  const base = subject.replace(/^(re:\s*)+/i, "").trim();
+  return `Re: ${base} [${reference}]`;
+}
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
@@ -41,10 +49,12 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createClient();
 
-  // Ticket inkl. Standort laden (RLS schützt – nur sichtbare Tickets)
+  // Ticket inkl. Standort, Postfach und Kunde laden (RLS schützt).
   const { data: ticket, error: ticketErr } = await supabase
     .from("tickets")
-    .select("id, location_id")
+    .select(
+      "id, reference, subject, location_id, customers(email), mailboxes(name, email)",
+    )
     .eq("id", input.ticketId)
     .single();
 
@@ -57,16 +67,47 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Keine Berechtigung" }, { status: 403 });
   }
 
+  const customer = ticket.customers as unknown as { email: string } | null;
+  const mailbox = ticket.mailboxes as unknown as {
+    name: string;
+    email: string;
+  } | null;
+
+  const to = customer?.email;
+  if (!to) {
+    return NextResponse.json(
+      { error: "Kein Empfänger (Kunde ohne E-Mail)" },
+      { status: 422 },
+    );
+  }
+
+  // Absender = Postfach-Adresse (mit Anzeigename), sonst globaler Fallback.
+  let from: string;
+  try {
+    from = mailbox?.email
+      ? `${mailbox.name} <${mailbox.email}>`
+      : getFromEmail();
+  } catch {
+    return NextResponse.json(
+      { error: "Keine Absenderadresse konfiguriert (Postfach oder RESEND_FROM_EMAIL)" },
+      { status: 503 },
+    );
+  }
+
+  const subject = subjectWithReference(ticket.subject, ticket.reference);
+  const bodyHtml = `<div style="white-space:pre-wrap">${escapeHtml(input.bodyText)}</div>`;
+
   // Versand
   let providerId: string | null = null;
   try {
     const resend = getResend();
     const { data, error } = await resend.emails.send({
-      from: getFromEmail(),
-      to: input.to,
-      subject: input.subject,
+      from,
+      to,
+      subject,
       text: input.bodyText,
-      html: input.bodyHtml,
+      html: bodyHtml,
+      ...(mailbox?.email ? { replyTo: mailbox.email } : {}),
     });
     if (error) throw new Error(error.message);
     providerId = data?.id ?? null;
@@ -81,10 +122,11 @@ export async function POST(request: NextRequest) {
     direction: "outbound",
     channel: "email",
     author_id: user.profileId,
-    to_email: input.to,
-    subject: input.subject,
+    from_email: mailbox?.email ?? null,
+    to_email: to,
+    subject,
     body_text: input.bodyText,
-    body_html: input.bodyHtml ?? null,
+    body_html: bodyHtml,
     provider_id: providerId,
     is_draft: false,
   });
@@ -93,13 +135,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nachricht konnte nicht gespeichert werden" }, { status: 500 });
   }
 
+  // Ticket auf "wartend" setzen (Antwort raus → wir warten auf Kunde).
+  await supabase.from("tickets").update({ status: "pending" }).eq("id", ticket.id);
+
   await logAudit({
     action: "message.reply_sent",
     entityType: "ticket",
     entityId: ticket.id,
     locationId: ticket.location_id,
-    metadata: { to: input.to, provider_id: providerId },
+    metadata: { to, provider_id: providerId },
   });
 
   return NextResponse.json({ ok: true, provider_id: providerId });
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }

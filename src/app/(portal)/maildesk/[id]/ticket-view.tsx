@@ -10,6 +10,7 @@ import {
 } from "@/modules/maildesk/types";
 import type { TicketStatus, TicketPriority } from "@/types/database";
 import type { TicketDetail } from "@/modules/maildesk/services/ticket-detail";
+import { ReplyEditor } from "./reply-editor";
 
 export function TicketView({
   ticket,
@@ -79,11 +80,11 @@ export function TicketView({
             ))}
           </div>
 
-          {/* Antwort-Hinweis (Versand via Resend folgt im nächsten Schritt) */}
-          <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-4 text-sm text-[var(--muted)]">
-            Antwort-Editor mit Versand über Resend + KI-Vorschläge folgt im
-            nächsten Schritt.
-          </div>
+          {/* Antwort-Editor: Versand über Resend + KI-Vorschläge */}
+          <ReplyEditor
+            ticketId={ticket.id}
+            hasCustomer={!!ticket.customerEmail}
+          />
         </div>
 
         {/* Seitenspalte: Steuerung + Kunde + Notizen */}
