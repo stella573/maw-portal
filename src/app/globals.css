@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+/* Dark Mode über .dark-Klasse (class-Strategie). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-brand-50: #eef6ff;
+  --color-brand-100: #d9eaff;
+  --color-brand-500: #2563eb;
+  --color-brand-600: #1d4ed8;
+  --color-brand-700: #1e40af;
+}
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+  --muted: #64748b;
+}
+
+.dark {
+  --background: #0b1120;
+  --foreground: #e2e8f0;
+  --surface: #111827;
+  --border: #1f2937;
+  --muted: #94a3b8;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+}
