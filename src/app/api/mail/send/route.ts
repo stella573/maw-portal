@@ -26,6 +26,7 @@ export const runtime = "nodejs";
 const bodySchema = z.object({
   ticketId: z.string().uuid(),
   bodyText: z.string().min(1),
+  attachmentIds: z.array(z.string().uuid()).max(10).optional(),
 });
 
 /** Stellt sicher, dass die Ticket-Referenz im Betreff steht (Threading). */
@@ -101,6 +102,31 @@ export async function POST(request: NextRequest) {
   const bodyHtml = `<div style="white-space:pre-wrap">${escapeHtml(input.bodyText)}</div>`;
   const emailHtml = renderEmailHtml(input.bodyText);
 
+  // Vorab hochgeladene Anhänge laden (nur solche dieses Tickets, noch ohne
+  // message_id). Inhalt aus Storage holen, um ihn an die Mail zu hängen.
+  const attachmentRows: { id: string; storage_path: string; file_name: string }[] = [];
+  const resendAttachments: { filename: string; content: Buffer }[] = [];
+  if (input.attachmentIds && input.attachmentIds.length > 0) {
+    const { data: atts } = await supabase
+      .from("attachments")
+      .select("id, storage_path, file_name")
+      .in("id", input.attachmentIds)
+      .eq("ticket_id", ticket.id)
+      .is("message_id", null);
+    for (const a of atts ?? []) {
+      const { data: blob, error: dlErr } = await supabase.storage
+        .from("mail-attachments")
+        .download(a.storage_path);
+      if (dlErr || !blob) {
+        console.error("[mail/send] attachment download:", dlErr?.message);
+        continue;
+      }
+      const buf = Buffer.from(await blob.arrayBuffer());
+      resendAttachments.push({ filename: a.file_name, content: buf });
+      attachmentRows.push(a);
+    }
+  }
+
   // Versand
   let providerId: string | null = null;
   try {
@@ -112,6 +138,7 @@ export async function POST(request: NextRequest) {
       text: input.bodyText,
       html: emailHtml,
       ...(mailbox?.email ? { replyTo: mailbox.email } : {}),
+      ...(resendAttachments.length > 0 ? { attachments: resendAttachments } : {}),
     });
     if (error) throw new Error(error.message);
     providerId = data?.id ?? null;
@@ -121,22 +148,37 @@ export async function POST(request: NextRequest) {
   }
 
   // Ausgehende Nachricht speichern
-  const { error: msgErr } = await supabase.from("messages").insert({
-    ticket_id: ticket.id,
-    direction: "outbound",
-    channel: "email",
-    author_id: user.profileId,
-    from_email: mailbox?.email ?? null,
-    to_email: to,
-    subject,
-    body_text: input.bodyText,
-    body_html: bodyHtml,
-    provider_id: providerId,
-    is_draft: false,
-  });
-  if (msgErr) {
-    console.error("[mail/send] message insert:", msgErr.message);
+  const { data: outMsg, error: msgErr } = await supabase
+    .from("messages")
+    .insert({
+      ticket_id: ticket.id,
+      direction: "outbound",
+      channel: "email",
+      author_id: user.profileId,
+      from_email: mailbox?.email ?? null,
+      to_email: to,
+      subject,
+      body_text: input.bodyText,
+      body_html: bodyHtml,
+      provider_id: providerId,
+      is_draft: false,
+    })
+    .select("id")
+    .single();
+  if (msgErr || !outMsg) {
+    console.error("[mail/send] message insert:", msgErr?.message);
     return NextResponse.json({ error: "Nachricht konnte nicht gespeichert werden" }, { status: 500 });
+  }
+
+  // Gesendete Anhänge der neuen Nachricht zuordnen.
+  if (attachmentRows.length > 0) {
+    await supabase
+      .from("attachments")
+      .update({ message_id: outMsg.id })
+      .in(
+        "id",
+        attachmentRows.map((a) => a.id),
+      );
   }
 
   // Ticket auf "wartend" setzen (Antwort raus → wir warten auf Kunde).
