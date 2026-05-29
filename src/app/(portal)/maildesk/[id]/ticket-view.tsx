@@ -286,31 +286,72 @@ function MessageBody({
 }
 
 /**
- * Zeigt E-Mail-HTML in einem gesandboxten iframe.
- * - sandbox="allow-same-origin" (OHNE allow-scripts): Scripts der Mail laufen
- *   NICHT, aber wir können die Höhe automatisch anpassen.
- * - srcDoc kapselt das Mail-HTML komplett vom Portal-CSS.
+ * Zeigt E-Mail-HTML in einem gesandboxten iframe – responsiv aufbereitet.
+ * - sandbox ohne allow-scripts: Scripts der Mail laufen NICHT (XSS-Schutz),
+ *   wir können aber (same-origin) Höhe messen und Layout anpassen.
+ * - injiziertes CSS zwingt feste Breiten (typische 600px-Mail-Tabellen) und
+ *   Bilder, sich an die Containerbreite anzupassen → kein horizontales Scrollen.
  */
 function HtmlMessage({ html }: { html: string }) {
   const ref = useRef<HTMLIFrameElement>(null);
-  const [height, setHeight] = useState(120);
+  const [height, setHeight] = useState(160);
 
-  function handleLoad() {
+  function measure() {
     try {
       const doc = ref.current?.contentDocument;
       if (doc?.body) {
-        // weißer Hintergrund, damit Mails mit transparentem BG lesbar sind
-        const h = Math.min(doc.body.scrollHeight + 16, 1400);
+        const h = Math.min(
+          Math.max(doc.body.scrollHeight, doc.documentElement.scrollHeight) + 16,
+          2000,
+        );
         setHeight(h);
       }
     } catch {
-      /* Höhe konnte nicht gelesen werden – Standardhöhe bleibt */
+      /* Höhe nicht lesbar – Standardhöhe bleibt */
     }
   }
 
+  function handleLoad() {
+    measure();
+    // Nach Bild-Laden und bei Größenänderung neu messen.
+    try {
+      const win = ref.current?.contentWindow;
+      const doc = ref.current?.contentDocument;
+      doc?.querySelectorAll("img").forEach((img) => {
+        if (!img.complete) img.addEventListener("load", measure, { once: true });
+      });
+      win?.addEventListener("resize", measure);
+    } catch {
+      /* ignore */
+    }
+    // mehrfach nachmessen, bis Layout/Bilder stehen
+    setTimeout(measure, 150);
+    setTimeout(measure, 600);
+  }
+
+  // CSS, das feste Mail-Layouts responsiv macht.
+  const responsiveCss = `
+    html,body{margin:0;padding:10px;background:#fff;color:#111;
+      font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;
+      word-break:break-word;overflow-x:hidden;-webkit-text-size-adjust:100%;}
+    img{max-width:100% !important;height:auto !important;}
+    /* feste Breiten (width="600", style="width:600px") aufbrechen */
+    table{max-width:100% !important;}
+    table[width]{width:100% !important;}
+    td,th{max-width:100% !important;}
+    *[width]{max-width:100% !important;}
+    div,p,span,table,td{max-width:100% !important;}
+    /* sehr breite Inline-Styles abfangen */
+    [style*="width:6"],[style*="width: 6"],[style*="width:7"],[style*="width: 7"],
+    [style*="width:5"],[style*="width: 5"]{max-width:100% !important;}
+    a{color:#1d4ed8;word-break:break-all;}
+    pre{white-space:pre-wrap;word-break:break-word;}
+  `;
+
   const srcDoc = `<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <base target="_blank">
-<style>html,body{margin:0;padding:8px;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;word-break:break-word;} img{max-width:100%;height:auto;} a{color:#1d4ed8;}</style>
+<style>${responsiveCss}</style>
 </head><body>${html}</body></html>`;
 
   return (
