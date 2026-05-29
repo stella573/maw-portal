@@ -1,0 +1,32 @@
+# Supabase CLI Projektkonfiguration
+# Docs: https://supabase.com/docs/guides/cli/config
+#
+# Vor dem ersten Einsatz:
+#   supabase login
+#   supabase link --project-ref <DEIN_PROJECT_REF>
+#   supabase db push          # wendet supabase/migrations/* an
+#   supabase db seed          # spielt supabase/seed.sql ein (oder via SQL-Editor)
+#
+# "project_id" ist nur ein lokaler Anzeigename – NICHT die Project-Ref/URL.
+project_id = "maw-internal-portal"
+
+[db]
+# Muss zur Postgres-Hauptversion deines Supabase-Projekts passen (Standard 15).
+major_version = 15
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[api]
+enabled = true
+# Schemas, die über die REST-API erreichbar sind. "private" bleibt bewusst
+# außen vor (interne SECURITY-DEFINER-Helfer).
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+
+[auth]
+# Wird in der Cloud über das Dashboard verwaltet; hier nur für lokales
+# `supabase start`. site_url/redirects an deine Domain anpassen.
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/dashboard"]
