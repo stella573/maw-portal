@@ -17,10 +17,22 @@ import { z } from "zod";
  * zur Laufzeit kennt.
  */
 
+// Toleriert App-URL ohne Schema (z. B. "portal.miningadventureworld.de") –
+// ergänzt automatisch https://, damit kein "Invalid url" mehr auftritt.
+const appUrl = z
+  .string()
+  .optional()
+  .transform((v) => {
+    if (!v || !v.trim()) return "http://localhost:3000";
+    const trimmed = v.trim().replace(/\/+$/, "");
+    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  })
+  .pipe(z.string().url());
+
 const publicSchema = z.object({
   NEXT_PUBLIC_SUPABASE_URL: z.string().url(),
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
-  NEXT_PUBLIC_APP_URL: z.string().url().default("http://localhost:3000"),
+  NEXT_PUBLIC_APP_URL: appUrl,
 });
 
 const serverSchema = z.object({
