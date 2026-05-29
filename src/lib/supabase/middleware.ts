@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 import { publicEnv } from "@/lib/env";
 import { getMfaStatus } from "@/lib/auth/mfa";
+import { mustChangePassword } from "@/lib/auth/password-policy";
 
 /** Öffentliche Routen, die ohne Session erreichbar sind. */
 const PUBLIC_PATHS = ["/login", "/auth"];
@@ -10,6 +11,8 @@ const PUBLIC_PATHS = ["/login", "/auth"];
 const BYPASS_PREFIXES = ["/api/webhooks", "/_next", "/favicon"];
 /** Pfad für die 2FA-Einrichtung/-Abfrage (immer erreichbar, solange eingeloggt). */
 const MFA_PATH = "/security/2fa";
+/** Pfad für die erzwungene Passwortänderung. */
+const PASSWORD_PATH = "/security/password";
 
 /**
  * Aktualisiert die Supabase-Session (Cookie-Refresh), schützt Routen und
@@ -63,9 +66,10 @@ export async function updateSession(request: NextRequest) {
     // 2FA-Status der aktuellen Session prüfen (AAL).
     const mfa = await getMfaStatus(supabase);
     const onMfaPath = pathname.startsWith(MFA_PATH);
+    const onPasswordPath = pathname.startsWith(PASSWORD_PATH);
 
-    // Solange 2FA nicht voll erfüllt ist: ALLES auf die 2FA-Seite leiten
-    // (auch /login), damit kein geschützter Bereich mit aal1 erreichbar ist.
+    // 1) Solange 2FA nicht voll erfüllt ist: ALLES auf die 2FA-Seite leiten
+    //    (auch /login), damit kein geschützter Bereich mit aal1 erreichbar ist.
     if (mfa.state !== "ok" && !onMfaPath) {
       const url = request.nextUrl.clone();
       url.pathname = MFA_PATH;
@@ -73,12 +77,27 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    // 2FA erfüllt → Login- und 2FA-Seite überspringen, ins Portal.
-    if (mfa.state === "ok" && (pathname === "/login" || onMfaPath)) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/dashboard";
-      url.search = "";
-      return NextResponse.redirect(url);
+    if (mfa.state === "ok") {
+      // 2) Erzwungene Passwortänderung (Initialpasswort) NACH erfüllter 2FA.
+      const needsPassword = mustChangePassword(user);
+
+      if (needsPassword && !onPasswordPath) {
+        const url = request.nextUrl.clone();
+        url.pathname = PASSWORD_PATH;
+        url.search = "";
+        return NextResponse.redirect(url);
+      }
+
+      // 3) Alles erfüllt → Login/2FA/Passwort-Seite überspringen, ins Portal.
+      if (
+        !needsPassword &&
+        (pathname === "/login" || onMfaPath || onPasswordPath)
+      ) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/dashboard";
+        url.search = "";
+        return NextResponse.redirect(url);
+      }
     }
   }
 

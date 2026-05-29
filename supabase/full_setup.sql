@@ -794,6 +794,8 @@ alter type public.audit_action add value if not exists 'mfa.challenge_failed';
 -- Benutzerverwaltung
 alter type public.audit_action add value if not exists 'user.created';
 alter type public.audit_action add value if not exists 'user.updated';
+alter type public.audit_action add value if not exists 'mfa.reset_by_admin';
+alter type public.audit_action add value if not exists 'auth.password_changed';
 -- ============================================================================
 -- 0007 · MailDesk: Postfächer (Funktions-/Team-Postfächer) + Mitgliedschaften
 -- ============================================================================

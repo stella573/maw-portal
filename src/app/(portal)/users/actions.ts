@@ -74,7 +74,9 @@ export async function createEmployee(
       email: input.email,
       password: input.password,
       email_confirm: true,
-      user_metadata: { full_name: input.fullName },
+      // must_change_password erzwingt beim ersten Login eine Passwortänderung
+      // (Initialpasswort ist nur ein Einmal-Zugang).
+      user_metadata: { full_name: input.fullName, must_change_password: true },
     });
     if (createErr || !created.user) {
       return {
@@ -292,6 +294,61 @@ export async function setActive(
       return { ok: false, message: "Keine Berechtigung." };
     }
     console.error("[users.setActive]", err);
+    return { ok: false, message: "Unerwarteter Fehler." };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// 2FA eines Mitarbeiters zurücksetzen (Owner/Admin)
+//   Entfernt ALLE TOTP-Faktoren des Users via Admin-API. Beim nächsten Login
+//   wird er durch die Middleware erneut zur 2FA-Einrichtung geführt.
+// ----------------------------------------------------------------------------
+export async function resetMfa(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    const actor = await guard();
+    const profileId = z.string().uuid().safeParse(formData.get("profileId"));
+    if (!profileId.success) return { ok: false, message: "Ungültige Eingabe." };
+
+    const admin = createAdminClient();
+    const { data: factors, error: listErr } = await admin.auth.admin.mfa.listFactors({
+      userId: profileId.data,
+    });
+    if (listErr) {
+      return { ok: false, message: `2FA-Faktoren nicht lesbar: ${listErr.message}` };
+    }
+
+    const all = factors?.factors ?? [];
+    if (all.length === 0) {
+      return { ok: false, message: "Dieser Mitarbeiter hat keine 2FA eingerichtet." };
+    }
+
+    for (const f of all) {
+      const { error: delErr } = await admin.auth.admin.mfa.deleteFactor({
+        id: f.id,
+        userId: profileId.data,
+      });
+      if (delErr) {
+        return { ok: false, message: `Zurücksetzen fehlgeschlagen: ${delErr.message}` };
+      }
+    }
+
+    await logAudit({
+      action: "mfa.reset_by_admin",
+      entityType: "profile",
+      entityId: profileId.data,
+      metadata: { removed_factors: all.length, by: actor.email },
+    });
+
+    revalidatePath("/users");
+    return { ok: true, message: "2FA zurückgesetzt. Mitarbeiter richtet beim nächsten Login neu ein." };
+  } catch (err) {
+    if (err instanceof Error && err.message === "FORBIDDEN") {
+      return { ok: false, message: "Keine Berechtigung." };
+    }
+    console.error("[users.resetMfa]", err);
     return { ok: false, message: "Unerwarteter Fehler." };
   }
 }
