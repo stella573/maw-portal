@@ -259,6 +259,7 @@ export type Database = {
           priority: TicketPriority;
           customer_id: string | null;
           location_id: string | null;
+          mailbox_id: string | null;
           assignee_id: string | null;
           created_by: string | null;
           last_message_at: string | null;
@@ -273,6 +274,7 @@ export type Database = {
           priority?: TicketPriority;
           customer_id?: string | null;
           location_id?: string | null;
+          mailbox_id?: string | null;
           assignee_id?: string | null;
           created_by?: string | null;
           last_message_at?: string | null;
@@ -287,11 +289,60 @@ export type Database = {
           priority?: TicketPriority;
           customer_id?: string | null;
           location_id?: string | null;
+          mailbox_id?: string | null;
           assignee_id?: string | null;
           created_by?: string | null;
           last_message_at?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      mailboxes: {
+        Row: {
+          id: string;
+          name: string;
+          email: string;
+          location_id: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          email: string;
+          location_id?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          email?: string;
+          location_id?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      mailbox_members: {
+        Row: {
+          mailbox_id: string;
+          profile_id: string;
+          created_at: string;
+        };
+        Insert: {
+          mailbox_id: string;
+          profile_id: string;
+          created_at?: string;
+        };
+        Update: {
+          mailbox_id?: string;
+          profile_id?: string;
+          created_at?: string;
         };
         Relationships: [];
       };

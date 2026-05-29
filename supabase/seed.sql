@@ -34,7 +34,8 @@ insert into public.permissions (key, description) values
   ('users.read',        'Benutzer/Profile lesen'),
   ('users.manage',      'Benutzer/Profile verwalten'),
   ('roles.manage',      'Rollen & Rechte verwalten'),
-  ('locations.manage',  'Standorte verwalten')
+  ('locations.manage',  'Standorte verwalten'),
+  ('mailboxes.manage',  'Postfächer & Zuweisungen verwalten')
 on conflict (key) do update set description = excluded.description;
 
 -- ----------------------------------------------------------------------------
@@ -58,7 +59,8 @@ join public.permissions p on p.key in (
   'tickets.assign', 'tickets.delete',
   'customers.read', 'customers.manage',
   'notes.create', 'tags.manage',
-  'templates.read', 'templates.manage'
+  'templates.read', 'templates.manage',
+  'mailboxes.manage'
 )
 where r.key = 'location_manager'
 on conflict do nothing;
