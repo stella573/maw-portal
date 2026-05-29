@@ -1,6 +1,31 @@
 import { createClient } from "@/lib/supabase/server";
 import type { AuthContext } from "@/lib/auth/permissions";
-import type { RoleKey } from "@/lib/auth/roles";
+import type { RoleKey, Permission } from "@/lib/auth/roles";
+
+/**
+ * Lädt die aktuelle Rollen-→-Rechte-Matrix aus der DB (role_permissions).
+ * Wird für dynamisches UI-Gating verwendet; die DB ist die Quelle der Wahrheit
+ * (RLS-Policies lesen dieselbe Tabelle). Fehlerhafte/leere Antwort → undefined,
+ * dann greift der statische Fallback in can().
+ */
+async function loadRolePermissions(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<Partial<Record<RoleKey, Permission[]>> | undefined> {
+  const { data, error } = await supabase
+    .from("role_permissions")
+    .select("roles(key), permissions(key)");
+  if (error || !data) return undefined;
+
+  const map: Partial<Record<RoleKey, Permission[]>> = {};
+  for (const row of data) {
+    const role = row.roles as unknown as { key: string } | null;
+    const perm = row.permissions as unknown as { key: string } | null;
+    if (!role?.key || !perm?.key) continue;
+    const rk = role.key as RoleKey;
+    (map[rk] ??= []).push(perm.key as Permission);
+  }
+  return Object.keys(map).length > 0 ? map : undefined;
+}
 
 /**
  * Lädt den eingeloggten User inkl. seiner Rollen-Zuweisungen und baut den
@@ -28,6 +53,8 @@ export async function getCurrentUser(): Promise<AuthContext | null> {
     .select("location_id, roles(key)")
     .eq("profile_id", user.id);
 
+  const rolePermissions = await loadRolePermissions(supabase);
+
   const assignments = (roleRows ?? [])
     .map((row) => {
       // roles kann je nach Join-Form Objekt oder Array sein – defensiv lesen.
@@ -43,6 +70,7 @@ export async function getCurrentUser(): Promise<AuthContext | null> {
     email: profile.email,
     fullName: profile.full_name,
     assignments,
+    rolePermissions,
   };
 }
 

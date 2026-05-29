@@ -25,6 +25,8 @@ alter type public.audit_action add value if not exists 'mailbox.created';
 alter type public.audit_action add value if not exists 'mailbox.updated';
 alter type public.audit_action add value if not exists 'mailbox.member_added';
 alter type public.audit_action add value if not exists 'mailbox.member_removed';
+alter type public.audit_action add value if not exists 'role.permission_granted';
+alter type public.audit_action add value if not exists 'role.permission_revoked';
 
 -- ===== 0007: Postfächer + Mitgliedschaften =================================
 

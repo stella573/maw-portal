@@ -24,6 +24,13 @@ export interface AuthContext {
   email: string;
   fullName: string | null;
   assignments: RoleAssignment[];
+  /**
+   * Optionale, aus der DB geladene Rollen-→-Rechte-Matrix (role_permissions).
+   * Wenn gesetzt, ist sie maßgeblich für can() – sonst Fallback auf die
+   * statische ROLE_PERMISSIONS-Konstante. So spiegelt das UI-Gating die in der
+   * Rechteübersicht editierbaren Rechte.
+   */
+  rolePermissions?: Partial<Record<RoleKey, readonly Permission[]>>;
 }
 
 /**
@@ -41,7 +48,9 @@ export function can(
   if (!ctx) return false;
 
   return ctx.assignments.some((a) => {
-    const grants = ROLE_PERMISSIONS[a.roleKey];
+    // Dynamische DB-Matrix bevorzugen, sonst statischer Fallback.
+    const grants =
+      ctx.rolePermissions?.[a.roleKey] ?? ROLE_PERMISSIONS[a.roleKey];
     if (!grants.includes(permission)) return false;
 
     // global wirksame Rolle gilt überall

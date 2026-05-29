@@ -44,7 +44,9 @@ export type AuditAction =
   | "mailbox.created"
   | "mailbox.updated"
   | "mailbox.member_added"
-  | "mailbox.member_removed";
+  | "mailbox.member_removed"
+  | "role.permission_granted"
+  | "role.permission_revoked";
 
 export type Database = {
   __InternalSupabase: {
