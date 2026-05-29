@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/services/auth/current-user";
 import type {
   TicketStatus,
   TicketPriority,
+  MessageDirection,
 } from "@/types/database";
 
 /**
@@ -28,6 +29,10 @@ export interface InboxTicket {
   customerName: string | null;
   lastMessageAt: string | null;
   createdAt: string;
+  /** Kurzvorschau der letzten Nachricht. */
+  preview: string | null;
+  /** true, wenn die letzte Nachricht vom Kunden kam (noch unbeantwortet). */
+  needsReply: boolean;
 }
 
 export interface TicketFilters {
@@ -100,11 +105,36 @@ export async function listTickets(
   const { data, error } = await query;
   if (error) throw new Error(error.message);
 
+  const ticketIds = (data ?? []).map((t) => t.id);
+
+  // Letzte Nachricht je Ticket für Vorschau + "unbeantwortet"-Markierung.
+  // Eine Abfrage über alle gelisteten Tickets, dann je Ticket die neueste.
+  const latestByTicket = new Map<
+    string,
+    { direction: MessageDirection; body: string | null }
+  >();
+  if (ticketIds.length > 0) {
+    const { data: msgs } = await supabase
+      .from("messages")
+      .select("ticket_id, direction, body_text, body_html, created_at")
+      .in("ticket_id", ticketIds)
+      .order("created_at", { ascending: false });
+    for (const m of msgs ?? []) {
+      // dank Sortierung ist der erste Treffer je Ticket der neueste
+      if (latestByTicket.has(m.ticket_id)) continue;
+      const body = (m.body_text && m.body_text.trim())
+        ? m.body_text
+        : stripToText(m.body_html);
+      latestByTicket.set(m.ticket_id, { direction: m.direction, body });
+    }
+  }
+
   return (data ?? []).map((t) => {
     const c = t.customers as unknown as {
       email: string;
       full_name: string | null;
     } | null;
+    const latest = latestByTicket.get(t.id);
     return {
       id: t.id,
       reference: t.reference,
@@ -115,8 +145,27 @@ export async function listTickets(
       customerName: c?.full_name ?? null,
       lastMessageAt: t.last_message_at,
       createdAt: t.created_at,
+      preview: latest?.body ? truncate(latest.body, 120) : null,
+      // unbeantwortet = letzte Nachricht kam vom Kunden (inbound)
+      needsReply: latest ? latest.direction === "inbound" : false,
     };
   });
+}
+
+function stripToText(html: string | null): string | null {
+  if (!html) return null;
+  const t = html
+    .replace(/<\s*br\s*\/?>/gi, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return t || null;
+}
+
+function truncate(s: string, n: number): string {
+  const clean = s.replace(/\s+/g, " ").trim();
+  return clean.length > n ? `${clean.slice(0, n)}…` : clean;
 }
 
 /** Kann der aktuelle User Tickets erstellen? (UI-Gating) */

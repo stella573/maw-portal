@@ -41,19 +41,17 @@ export async function getCurrentUser(): Promise<AuthContext | null> {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, email, full_name")
-    .eq("id", user.id)
-    .single();
+  // Profil, Rollen-Zuweisungen und Rechte-Matrix parallel laden
+  // (vorher sequentiell → spürbarer Lag bei jeder Navigation, da im Layout).
+  const [profileRes, roleRowsRes, rolePermissions] = await Promise.all([
+    supabase.from("profiles").select("id, email, full_name").eq("id", user.id).single(),
+    supabase.from("user_roles").select("location_id, roles(key)").eq("profile_id", user.id),
+    loadRolePermissions(supabase),
+  ]);
+
+  const profile = profileRes.data;
   if (!profile) return null;
-
-  const { data: roleRows } = await supabase
-    .from("user_roles")
-    .select("location_id, roles(key)")
-    .eq("profile_id", user.id);
-
-  const rolePermissions = await loadRolePermissions(supabase);
+  const roleRows = roleRowsRes.data;
 
   const assignments = (roleRows ?? [])
     .map((row) => {

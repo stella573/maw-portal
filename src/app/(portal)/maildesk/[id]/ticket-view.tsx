@@ -56,9 +56,7 @@ export function TicketView({ ticket }: { ticket: TicketDetail }) {
                   </span>
                   <span>{formatDateTime(m.createdAt)}</span>
                 </div>
-                <div className="whitespace-pre-wrap text-sm">
-                  {m.bodyText ?? stripHtml(m.bodyHtml)}
-                </div>
+                <MessageBody text={m.bodyText} html={m.bodyHtml} />
               </div>
             ))}
           </div>
@@ -207,5 +205,37 @@ function formatDateTime(iso: string): string {
 
 function stripHtml(html: string | null): string {
   if (!html) return "";
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return html
+    // Block-Elemente in Zeilenumbrüche überführen, damit der Text lesbar bleibt
+    .replace(/<\s*br\s*\/?>/gi, "\n")
+    .replace(/<\/\s*(p|div|tr|li|h[1-6])\s*>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    // HTML-Entities grob auflösen
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+}
+
+/** Rendert den Nachrichtentext; fällt auf HTML-Strip zurück, sonst Hinweis. */
+function MessageBody({
+  text,
+  html,
+}: {
+  text: string | null;
+  html: string | null;
+}) {
+  const content = (text && text.trim()) || stripHtml(html);
+  if (!content) {
+    return (
+      <p className="text-sm italic text-[var(--muted)]">
+        (Kein Textinhalt – evtl. nur HTML/Anhang. Rohdaten liegen am Ticket vor.)
+      </p>
+    );
+  }
+  return <div className="whitespace-pre-wrap break-words text-sm">{content}</div>;
 }

@@ -175,20 +175,43 @@ function TicketList({ tickets }: { tickets: InboxTicket[] }) {
           <li key={t.id}>
             <Link
               href={`/maildesk/${t.id}`}
-              className="flex items-center gap-3 px-4 py-3 transition hover:bg-[var(--background)]"
+              className={`flex items-start gap-3 px-4 py-3 transition hover:bg-[var(--background)] ${
+                t.needsReply ? "bg-brand-50/40 dark:bg-brand-700/10" : ""
+              }`}
             >
+              {/* Unbeantwortet-Punkt */}
+              <span className="mt-1.5 shrink-0">
+                {t.needsReply ? (
+                  <span
+                    className="block h-2 w-2 rounded-full bg-brand-600"
+                    aria-label="Unbeantwortet"
+                    title="Unbeantwortet"
+                  />
+                ) : (
+                  <span className="block h-2 w-2" />
+                )}
+              </span>
               <span
-                className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[t.status]}`}
+                className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[t.status]}`}
               >
                 {TICKET_STATUS_LABELS[t.status]}
               </span>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="truncate font-medium">{t.subject}</span>
+                  <span
+                    className={`truncate ${t.needsReply ? "font-semibold" : "font-medium"}`}
+                  >
+                    {t.subject}
+                  </span>
                   <span className={`shrink-0 text-xs ${PRIORITY_STYLES[t.priority]}`}>
                     ● {TICKET_PRIORITY_LABELS[t.priority]}
                   </span>
                 </div>
+                {t.preview && (
+                  <div className="truncate text-xs text-[var(--foreground)]/70">
+                    {t.preview}
+                  </div>
+                )}
                 <div className="truncate text-xs text-[var(--muted)]">
                   {t.reference}
                   {t.customerName || t.customerEmail

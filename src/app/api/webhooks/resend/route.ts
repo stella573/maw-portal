@@ -26,15 +26,64 @@ import type { Json } from "@/types/database";
 
 export const runtime = "nodejs";
 
-const inboundSchema = z.object({
-  from: z.string(),
-  to: z.union([z.string(), z.array(z.string())]).optional(),
-  subject: z.string().default("(kein Betreff)"),
-  text: z.string().optional(),
-  html: z.string().optional(),
-  message_id: z.string().optional(),
-  from_name: z.string().optional(),
-});
+// Bewusst permissiv: Resend-Inbound-Payloads variieren je nach Setup in den
+// Feldnamen. Wir validieren nur das Minimum und lesen Inhalt/Adressen tolerant
+// über extractBody()/Adress-Helfer aus dem Roh-Objekt.
+const inboundSchema = z
+  .object({
+    from: z.union([z.string(), z.record(z.string(), z.unknown())]).optional(),
+    to: z
+      .union([
+        z.string(),
+        z.array(z.union([z.string(), z.record(z.string(), z.unknown())])),
+        z.record(z.string(), z.unknown()),
+      ])
+      .optional(),
+    subject: z.string().optional(),
+    text: z.string().optional(),
+    html: z.string().optional(),
+    message_id: z.string().optional(),
+    from_name: z.string().optional(),
+  })
+  .passthrough();
+
+/** Liest eine Adresse aus String oder Objekt ({address|email|value}). */
+function readAddress(v: unknown): string | undefined {
+  if (typeof v === "string") return v;
+  if (Array.isArray(v)) return readAddress(v[0]);
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    const cand = o.address ?? o.email ?? o.value ?? o.addr;
+    if (typeof cand === "string") return cand;
+  }
+  return undefined;
+}
+
+/** Extrahiert den Mailtext aus diversen möglichen Feldern des Payloads. */
+function extractBody(raw: Record<string, unknown>): {
+  text: string | null;
+  html: string | null;
+} {
+  const str = (x: unknown) => (typeof x === "string" && x.trim() ? x : null);
+  // direkte Felder
+  let text =
+    str(raw.text) ??
+    str(raw.plain) ??
+    str(raw["text/plain"]) ??
+    str((raw.body as Record<string, unknown> | undefined)?.text) ??
+    null;
+  const html =
+    str(raw.html) ??
+    str(raw["text/html"]) ??
+    str((raw.body as Record<string, unknown> | undefined)?.html) ??
+    null;
+  // body als String
+  if (!text && !html) {
+    const b = str(raw.body) ?? str(raw.content) ?? str(raw.message);
+    if (b) text = b;
+  }
+  return { text, html };
+}
 
 export async function POST(request: NextRequest) {
   const env = getServerEnv();
@@ -69,9 +118,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Validierung fehlgeschlagen" }, { status: 422 });
   }
   const mail = result.data;
+  const raw = mail as Record<string, unknown>;
 
-  const fromEmail = extractEmail(mail.from);
-  const toEmail = extractEmail(mail.to);
+  // Adressen tolerant lesen (String oder Objekt), dann reine E-Mail extrahieren.
+  const fromEmail = extractEmail(readAddress(mail.from) ?? raw.sender as string | undefined);
+  const toEmail = extractEmail(
+    readAddress(mail.to) ?? (raw.recipient as string | undefined) ?? (raw["to_email"] as string | undefined),
+  );
+  const subject =
+    mail.subject ?? (raw.Subject as string | undefined) ?? "(kein Betreff)";
+  const { text: bodyText, html: bodyHtml } = extractBody(raw);
+
   if (!fromEmail) {
     return NextResponse.json({ error: "Absender fehlt" }, { status: 422 });
   }
@@ -119,7 +176,7 @@ export async function POST(request: NextRequest) {
 
   // 2) Threading: Ticket-Referenz im Betreff?
   let ticketId: string | undefined;
-  const reference = extractTicketReference(mail.subject);
+  const reference = extractTicketReference(subject);
   if (reference) {
     const { data: byRef } = await supabase
       .from("tickets")
@@ -149,7 +206,7 @@ export async function POST(request: NextRequest) {
     const { data: ticket, error: ticketErr } = await supabase
       .from("tickets")
       .insert({
-        subject: mail.subject,
+        subject,
         customer_id: customer.id,
         mailbox_id: mailboxId,
         location_id: mailboxLocationId,
@@ -174,9 +231,9 @@ export async function POST(request: NextRequest) {
     channel: "email",
     from_email: fromEmail,
     to_email: toEmail,
-    subject: mail.subject,
-    body_text: mail.text ?? null,
-    body_html: mail.html ?? null,
+    subject,
+    body_text: bodyText,
+    body_html: bodyHtml,
     provider_id: mail.message_id ?? null,
     raw: result.data as unknown as Json,
   });
