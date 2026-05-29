@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { publicEnv } from "@/lib/env";
 
 /**
  * Minimale Login-Seite (Magic Link). Bewusst schlank gehalten – das
@@ -13,13 +12,30 @@ export default function LoginPage() {
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [message, setMessage] = useState("");
 
+  // Fehler aus der Callback-Route (?error=...) anzeigen.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get("error");
+    if (err) {
+      setStatus("error");
+      setMessage(
+        err === "missing_code"
+          ? "Anmeldelink ungültig oder abgelaufen. Bitte erneut anfordern."
+          : err,
+      );
+    }
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("sending");
     const supabase = createClient();
+    // Origin dynamisch aus dem Browser – passt immer zur tatsächlichen Domain
+    // (lokal wie Vercel). Der Magic Link führt zur Callback-Route, die den
+    // Code gegen eine Session eintauscht.
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${publicEnv.NEXT_PUBLIC_APP_URL}/dashboard` },
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard` },
     });
     if (error) {
       setStatus("error");
