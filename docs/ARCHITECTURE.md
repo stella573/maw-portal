@@ -155,7 +155,7 @@ Alle Primärschlüssel sind `uuid` (`gen_random_uuid()`), Zeitstempel sind
 - **audit_logs** – Append-only-Protokoll sicherheitsrelevanter Aktionen.
 
 > Das vollständige Schema inkl. Indizes und Constraints liegt in
-> `supabase/migrations/`. Siehe `0002`–`0006`.
+> `supabase/migrations/`. Siehe `0002`–`0005`.
 
 ### ENUMs
 - `ticket_status`: `open`, `pending`, `resolved`
