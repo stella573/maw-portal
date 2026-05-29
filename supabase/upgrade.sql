@@ -245,3 +245,25 @@ from public.roles r
 join public.permissions p on p.key = 'mailboxes.manage'
 where r.key = 'location_manager'
 on conflict do nothing;
+
+-- ===== 0008: Security-Härtung =============================================
+revoke execute on function public.log_audit(public.audit_action, text, uuid, uuid, jsonb) from anon, public;
+grant  execute on function public.log_audit(public.audit_action, text, uuid, uuid, jsonb) to authenticated;
+do $$ begin
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='rls_auto_enable') then
+    revoke execute on function public.rls_auto_enable() from anon, authenticated, public;
+  end if;
+end $$;
+alter function private.auth_profile_id() set search_path = public;
+alter function private.set_updated_at() set search_path = public;
+alter function private.touch_ticket_last_message() set search_path = public;
+alter function private.audit_ticket_status_change() set search_path = public;
+alter function private.handle_new_user() set search_path = public;
+
+-- ===== 0009: Anhänge (Storage-Bucket + Spalte) ============================
+insert into storage.buckets (id, name, public)
+values ('mail-attachments', 'mail-attachments', false)
+on conflict (id) do nothing;
+
+alter table public.attachments
+  add column if not exists provider_attachment_id text;

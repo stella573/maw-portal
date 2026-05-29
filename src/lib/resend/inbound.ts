@@ -131,3 +131,82 @@ export async function fetchReceivedEmail(
     return null;
   }
 }
+
+export interface ReceivedAttachment {
+  id: string | null;
+  filename: string;
+  contentType: string | null;
+  /** Heruntergeladener Inhalt (zum Persistieren in Storage). */
+  content: Uint8Array;
+}
+
+/**
+ * Lädt die Anhänge einer eingegangenen Mail über die Resend-API:
+ *   GET /emails/receiving/{id}/attachments   → Liste mit download_url
+ * Die download_url ist signiert/abläuft → wir laden den Inhalt sofort herunter,
+ * damit er dauerhaft in Supabase Storage abgelegt werden kann.
+ *
+ * Defensiv: Fehler einzelner Anhänge brechen den Import nicht ab.
+ */
+export async function fetchReceivedAttachments(
+  emailId: string,
+  apiKey: string,
+): Promise<ReceivedAttachment[]> {
+  try {
+    const res = await fetch(
+      `https://api.resend.com/emails/receiving/${encodeURIComponent(emailId)}/attachments`,
+      { headers: { Authorization: `Bearer ${apiKey}` }, cache: "no-store" },
+    );
+    if (!res.ok) {
+      console.error(
+        `[resend] attachments.list ${emailId} → HTTP ${res.status}`,
+      );
+      return [];
+    }
+    const json = (await res.json()) as Record<string, unknown>;
+    // Antwort kann { data: [...] } oder direkt [...] sein.
+    const list = Array.isArray(json)
+      ? json
+      : Array.isArray(json.data)
+        ? (json.data as unknown[])
+        : [];
+
+    const out: ReceivedAttachment[] = [];
+    for (const raw of list) {
+      const a = raw as Record<string, unknown>;
+      const downloadUrl =
+        (a.download_url as string | undefined) ?? (a.url as string | undefined);
+      const filename =
+        (a.filename as string | undefined) ??
+        (a.name as string | undefined) ??
+        "anhang";
+      const contentType =
+        (a.content_type as string | undefined) ??
+        (a.contentType as string | undefined) ??
+        null;
+      const id = (a.id as string | undefined) ?? null;
+      if (!downloadUrl) continue;
+
+      try {
+        const fileRes = await fetch(downloadUrl, { cache: "no-store" });
+        if (!fileRes.ok) {
+          console.error(`[resend] Anhang-Download fehlgeschlagen: ${filename}`);
+          continue;
+        }
+        const buf = new Uint8Array(await fileRes.arrayBuffer());
+        // Sicherheitslimit: Anhänge > 25 MB überspringen.
+        if (buf.byteLength > 25 * 1024 * 1024) {
+          console.warn(`[resend] Anhang zu groß, übersprungen: ${filename}`);
+          continue;
+        }
+        out.push({ id, filename, contentType, content: buf });
+      } catch (err) {
+        console.error(`[resend] Anhang-Fehler ${filename}:`, err);
+      }
+    }
+    return out;
+  } catch (err) {
+    console.error("[resend] fetchReceivedAttachments Fehler:", err);
+    return [];
+  }
+}

@@ -1038,6 +1038,48 @@ create policy attachments_select on public.attachments
     )
   );
 -- ============================================================================
+-- 0008 · Security-Härtung (Advisor-Befunde)
+-- ============================================================================
+-- Idempotent. Wird auch direkt über den Supabase-Konnektor angewandt.
+
+-- log_audit darf NICHT mehr von anon (nicht eingeloggt) aufgerufen werden –
+-- verhindert gefälschte Audit-Einträge über die öffentliche REST-API.
+-- authenticated behält EXECUTE (App schreibt das Log mit User-Session).
+revoke execute on function public.log_audit(public.audit_action, text, uuid, uuid, jsonb) from anon, public;
+grant  execute on function public.log_audit(public.audit_action, text, uuid, uuid, jsonb) to authenticated;
+
+-- rls_auto_enable() ist eine Event-Trigger-Funktion (läuft automatisch bei
+-- CREATE TABLE) und wird nie direkt aufgerufen → EXECUTE für alle entziehen.
+revoke execute on function public.rls_auto_enable() from anon, authenticated, public;
+
+-- search_path auf allen SECURITY-relevanten Funktionen fixieren (Härtung gegen
+-- search_path-Injection).
+alter function private.auth_profile_id() set search_path = public;
+alter function private.set_updated_at() set search_path = public;
+alter function private.touch_ticket_last_message() set search_path = public;
+alter function private.audit_ticket_status_change() set search_path = public;
+alter function private.handle_new_user() set search_path = public;
+-- ============================================================================
+-- 0009 · Anhänge: Storage-Bucket + Spalten
+-- ============================================================================
+-- Eingehende (und später ausgehende) Mail-Anhänge werden dauerhaft in einem
+-- PRIVATEN Storage-Bucket abgelegt. Der Zugriff läuft ausschließlich über die
+-- App (Service-Role beim Schreiben, signierte URLs beim Lesen nach
+-- Permission-Prüfung) – kein öffentlicher Bucket.
+
+-- Privaten Bucket anlegen (idempotent).
+insert into storage.buckets (id, name, public)
+values ('mail-attachments', 'mail-attachments', false)
+on conflict (id) do nothing;
+
+-- attachments: provider-Referenz ergänzen (für Deduplizierung/Diagnose).
+alter table public.attachments
+  add column if not exists provider_attachment_id text;
+
+-- Kein öffentlicher Storage-Zugriff: KEINE storage.objects-Policies für
+-- anon/authenticated. Lesen erfolgt über signierte URLs (Service-Role in der
+-- Download-Route nach App-seitiger Berechtigungsprüfung gegen public.attachments).
+-- ============================================================================
 -- Seed · Rollen, Rechte, Rollen-Rechte-Matrix, Demo-Standort
 -- Idempotent: kann mehrfach ausgeführt werden.
 -- ============================================================================

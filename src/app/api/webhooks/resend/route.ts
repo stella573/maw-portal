@@ -7,6 +7,7 @@ import {
   extractEmail,
   extractTicketReference,
   fetchReceivedEmail,
+  fetchReceivedAttachments,
 } from "@/lib/resend/inbound";
 import type { Json } from "@/types/database";
 
@@ -241,22 +242,58 @@ export async function POST(request: NextRequest) {
   }
 
   // 5) Eingehende Nachricht anhängen (Trigger pflegt last_message_at).
-  const { error: msgErr } = await supabase.from("messages").insert({
-    ticket_id: ticketId,
-    direction: "inbound",
-    channel: "email",
-    from_email: fromEmail,
-    to_email: toEmail,
-    subject,
-    body_text: bodyText,
-    body_html: bodyHtml,
-    provider_id: mail.message_id ?? null,
-    raw: result.data as unknown as Json,
-  });
+  const { data: insertedMsg, error: msgErr } = await supabase
+    .from("messages")
+    .insert({
+      ticket_id: ticketId,
+      direction: "inbound",
+      channel: "email",
+      from_email: fromEmail,
+      to_email: toEmail,
+      subject,
+      body_text: bodyText,
+      body_html: bodyHtml,
+      provider_id: mail.message_id ?? null,
+      raw: result.data as unknown as Json,
+    })
+    .select("id")
+    .single();
 
-  if (msgErr) {
-    console.error("[resend-webhook] message insert:", msgErr.message);
+  if (msgErr || !insertedMsg) {
+    console.error("[resend-webhook] message insert:", msgErr?.message);
     return NextResponse.json({ error: "Nachricht konnte nicht gespeichert werden" }, { status: 500 });
+  }
+
+  // 5b) Anhänge importieren (best effort – Fehler brechen den Import nicht ab).
+  if (emailId && env.RESEND_API_KEY) {
+    try {
+      const attachments = await fetchReceivedAttachments(emailId, env.RESEND_API_KEY);
+      for (const att of attachments) {
+        const safeName = att.filename.replace(/[^\w.\-]+/g, "_").slice(0, 120) || "anhang";
+        const storagePath = `${ticketId}/${insertedMsg.id}/${crypto.randomUUID()}-${safeName}`;
+        const { error: upErr } = await supabase.storage
+          .from("mail-attachments")
+          .upload(storagePath, att.content, {
+            contentType: att.contentType ?? "application/octet-stream",
+            upsert: false,
+          });
+        if (upErr) {
+          console.error("[resend-webhook] storage upload:", upErr.message);
+          continue;
+        }
+        await supabase.from("attachments").insert({
+          message_id: insertedMsg.id,
+          ticket_id: ticketId,
+          storage_path: storagePath,
+          file_name: att.filename.slice(0, 200),
+          content_type: att.contentType,
+          size_bytes: att.content.byteLength,
+          provider_attachment_id: att.id,
+        });
+      }
+    } catch (err) {
+      console.error("[resend-webhook] Anhang-Import:", err);
+    }
   }
 
   // 6) Audit (Actor = System/NULL).

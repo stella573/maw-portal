@@ -27,6 +27,14 @@ export interface TicketDetailNote {
   createdAt: string;
 }
 
+export interface TicketDetailAttachment {
+  id: string;
+  messageId: string | null;
+  fileName: string;
+  contentType: string | null;
+  sizeBytes: number | null;
+}
+
 export interface TicketDetail {
   id: string;
   reference: string;
@@ -40,6 +48,7 @@ export interface TicketDetail {
   createdAt: string;
   messages: TicketDetailMessage[];
   notes: TicketDetailNote[];
+  attachments: TicketDetailAttachment[];
 }
 
 /**
@@ -72,6 +81,12 @@ export async function getTicketDetail(
   const { data: notes } = await supabase
     .from("notes")
     .select("id, body, created_at, profiles(full_name)")
+    .eq("ticket_id", ticketId)
+    .order("created_at", { ascending: true });
+
+  const { data: attachments } = await supabase
+    .from("attachments")
+    .select("id, message_id, file_name, content_type, size_bytes")
     .eq("ticket_id", ticketId)
     .order("created_at", { ascending: true });
 
@@ -116,5 +131,12 @@ export async function getTicketDetail(
         createdAt: n.created_at,
       };
     }),
+    attachments: (attachments ?? []).map((a) => ({
+      id: a.id,
+      messageId: a.message_id,
+      fileName: a.file_name,
+      contentType: a.content_type,
+      sizeBytes: a.size_bytes,
+    })),
   };
 }

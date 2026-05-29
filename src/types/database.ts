@@ -486,6 +486,7 @@ export type Database = {
           file_name: string;
           content_type: string | null;
           size_bytes: number | null;
+          provider_attachment_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -496,6 +497,7 @@ export type Database = {
           file_name: string;
           content_type?: string | null;
           size_bytes?: number | null;
+          provider_attachment_id?: string | null;
           created_at?: string;
         };
         Update: {
@@ -506,6 +508,7 @@ export type Database = {
           file_name?: string;
           content_type?: string | null;
           size_bytes?: number | null;
+          provider_attachment_id?: string | null;
           created_at?: string;
         };
         Relationships: [];

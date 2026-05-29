@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useRef, useState } from "react";
-import { ArrowLeft, StickyNote } from "lucide-react";
+import { ArrowLeft, StickyNote, Paperclip } from "lucide-react";
 import Link from "next/link";
 import { updateTicket, addNote } from "./actions";
 import {
@@ -9,7 +9,10 @@ import {
   TICKET_PRIORITY_LABELS,
 } from "@/modules/maildesk/types";
 import type { TicketStatus, TicketPriority } from "@/types/database";
-import type { TicketDetail } from "@/modules/maildesk/services/ticket-detail";
+import type {
+  TicketDetail,
+  TicketDetailAttachment,
+} from "@/modules/maildesk/services/ticket-detail";
 import { ReplyEditor } from "./reply-editor";
 
 export function TicketView({
@@ -64,6 +67,9 @@ export function TicketView({
                   <span>{formatDateTime(m.createdAt)}</span>
                 </div>
                 <MessageBody text={m.bodyText} html={m.bodyHtml} />
+                <AttachmentList
+                  items={ticket.attachments.filter((a) => a.messageId === m.id)}
+                />
                 {showDiagnostics &&
                   m.direction === "inbound" &&
                   m.raw != null && (
@@ -238,6 +244,36 @@ function stripHtml(html: string | null): string {
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]+/g, " ")
     .trim();
+}
+
+/** Liste der Anhänge einer Nachricht – Download über die berechtigte Route. */
+function AttachmentList({ items }: { items: TicketDetailAttachment[] }) {
+  if (items.length === 0) return null;
+  return (
+    <div className="mt-3 flex flex-wrap gap-2">
+      {items.map((a) => (
+        <a
+          key={a.id}
+          href={`/api/mail/attachment/${a.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--surface)]"
+        >
+          <Paperclip className="h-3.5 w-3.5 shrink-0" />
+          <span className="max-w-[200px] truncate">{a.fileName}</span>
+          {a.sizeBytes != null && (
+            <span className="text-[var(--muted)]">{formatBytes(a.sizeBytes)}</span>
+          )}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
 
 /**
