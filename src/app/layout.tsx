@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { APP_NAME } from "@/config/app";
 
 export const metadata: Metadata = {
-  title: "MAW Internal Portal",
-  description: "Internes Unternehmensportal der Mining Adventure World",
+  title: APP_NAME,
+  description: "Internes Mitarbeiterportal der Mining Adventure World",
 };
 
 export default function RootLayout({

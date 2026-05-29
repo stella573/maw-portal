@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAVIGATION } from "@/config/navigation";
+import { APP_NAME_SHORT } from "@/config/app";
 import { cn } from "@/utils/cn";
 
 /**
@@ -18,7 +19,7 @@ export function Sidebar() {
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
           M
         </div>
-        <span className="font-semibold">MAW Portal</span>
+        <span className="font-semibold">{APP_NAME_SHORT}</span>
       </div>
 
       <nav className="flex-1 space-y-1 overflow-y-auto p-3">

@@ -5,7 +5,7 @@ export default function DashboardPage() {
     <div>
       <PageHeader
         title="Dashboard"
-        description="Überblick über das MAW Internal Portal."
+        description="Überblick über den Mining Adventure World Mitarbeiter HUB."
       />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {[

@@ -1,5 +1,6 @@
 import { LogOut } from "lucide-react";
 import { ThemeToggle } from "./theme-toggle";
+import { APP_NAME_SHORT } from "@/config/app";
 
 interface TopbarProps {
   userEmail: string;
@@ -10,7 +11,7 @@ interface TopbarProps {
 export function Topbar({ userEmail, userName }: TopbarProps) {
   return (
     <header className="flex h-16 items-center justify-between border-b border-[var(--border)] bg-[var(--surface)] px-4 md:px-6">
-      <div className="font-medium md:hidden">MAW Portal</div>
+      <div className="font-medium md:hidden">{APP_NAME_SHORT}</div>
       <div className="hidden md:block" />
       <div className="flex items-center gap-3">
         <ThemeToggle />
