@@ -26,7 +26,16 @@ schemas = ["public"]
 extra_search_path = ["public", "extensions"]
 
 [auth]
-# Wird in der Cloud über das Dashboard verwaltet; hier nur für lokales
-# `supabase start`. site_url/redirects an deine Domain anpassen.
+# Wird in der PRODUKTION über das Supabase-Dashboard verwaltet
+# (Authentication → URL Configuration). Diese Werte gelten nur für lokales
+# `supabase start`.
+#
+# Produktion im Dashboard setzen:
+#   Site URL:       https://portal.miningadventureworld.de
+#   Redirect URLs:  https://portal.miningadventureworld.de/**
+#                   http://localhost:3000/**
 site_url = "http://localhost:3000"
-additional_redirect_urls = ["http://localhost:3000/dashboard"]
+additional_redirect_urls = [
+  "http://localhost:3000/**",
+  "https://portal.miningadventureworld.de/**",
+]

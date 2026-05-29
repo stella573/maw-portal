@@ -74,10 +74,18 @@ npm run typecheck  # TypeScript ohne Emit
 ## 6. Deployment auf Vercel
 1. Repo mit Vercel verbinden.
 2. Alle Environment-Variablen aus `.env.example` im Vercel-Projekt setzen
-   (Production + Preview).
-3. Resend Inbound-Webhook auf `https://<deine-domain>/api/webhooks/resend`
-   zeigen lassen und `RESEND_WEBHOOK_SECRET` hinterlegen.
-4. Deploy auslösen.
+   (Production + Preview). `NEXT_PUBLIC_APP_URL` auf die echte Domain
+   (`https://portal.miningadventureworld.de`).
+3. **Supabase Auth konfigurieren** (Dashboard → Authentication → URL
+   Configuration):
+   - Site URL: `https://portal.miningadventureworld.de`
+   - Redirect URLs: `https://portal.miningadventureworld.de/**` und
+     `http://localhost:3000/**`
+   - Ohne diese Whitelist zeigt der Magic Link auf die Site URL zurück.
+4. Resend Inbound-Webhook auf
+   `https://portal.miningadventureworld.de/api/webhooks/resend` zeigen lassen
+   und `RESEND_WEBHOOK_SECRET` hinterlegen.
+5. Deploy auslösen.
 
 ## 7. Resend einrichten
 - Domain in Resend verifizieren.
