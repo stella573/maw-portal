@@ -8,3 +8,7 @@ alter type public.audit_action add value if not exists 'mfa.enrolled';
 alter type public.audit_action add value if not exists 'mfa.verified';
 alter type public.audit_action add value if not exists 'mfa.unenrolled';
 alter type public.audit_action add value if not exists 'mfa.challenge_failed';
+
+-- Benutzerverwaltung
+alter type public.audit_action add value if not exists 'user.created';
+alter type public.audit_action add value if not exists 'user.updated';

@@ -11,13 +11,24 @@ import { cn } from "@/utils/cn";
  * ausgegraut und nicht klickbar.
  *
  * @param onNavigate optionaler Callback (z. B. Drawer auf Mobil schließen).
+ * @param allowedKeys Keys, die der User sehen darf (Permission-Gating). Items,
+ *   die ein Recht erfordern und nicht enthalten sind, werden ausgeblendet.
  */
-export function NavList({ onNavigate }: { onNavigate?: () => void }) {
+export function NavList({
+  onNavigate,
+  allowedKeys,
+}: {
+  onNavigate?: () => void;
+  allowedKeys?: string[];
+}) {
   const pathname = usePathname();
+  const visible = NAVIGATION.filter(
+    (item) => !item.permission || !allowedKeys || allowedKeys.includes(item.key),
+  );
 
   return (
     <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-      {NAVIGATION.map((item) => {
+      {visible.map((item) => {
         const Icon = item.icon;
         const isActive =
           pathname === item.href || pathname.startsWith(`${item.href}/`);

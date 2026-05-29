@@ -26,9 +26,11 @@ export function MobileNavTrigger({ onOpen }: { onOpen: () => void }) {
 export function MobileNavDrawer({
   open,
   onClose,
+  allowedNavKeys,
 }: {
   open: boolean;
   onClose: () => void;
+  allowedNavKeys: string[];
 }) {
   // Body-Scroll sperren, solange offen; Escape schließt.
   useEffect(() => {
@@ -81,7 +83,7 @@ export function MobileNavDrawer({
           </button>
         </div>
 
-        <NavList onNavigate={onClose} />
+        <NavList onNavigate={onClose} allowedKeys={allowedNavKeys} />
 
         <div className="border-t border-[var(--border)] p-3 text-xs text-[var(--muted)]">
           Phase 1 · MailDesk

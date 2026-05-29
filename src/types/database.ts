@@ -36,7 +36,9 @@ export type AuditAction =
   | "mfa.enrolled"
   | "mfa.verified"
   | "mfa.unenrolled"
-  | "mfa.challenge_failed";
+  | "mfa.challenge_failed"
+  | "user.created"
+  | "user.updated";
 
 export type Database = {
   __InternalSupabase: {

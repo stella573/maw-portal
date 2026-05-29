@@ -8,6 +8,7 @@ import {
   BookOpen,
   Contact,
   Settings,
+  UserCog,
   type LucideIcon,
 } from "lucide-react";
 import type { Permission } from "@/lib/auth/roles";
@@ -40,5 +41,6 @@ export const NAVIGATION: NavItem[] = [
   { key: "checklists", label: "Checklisten", href: "/checklists", icon: ListChecks, status: "planned" },
   { key: "knowledge", label: "Wissensdatenbank", href: "/knowledge", icon: BookOpen, status: "planned" },
   { key: "crm", label: "CRM", href: "/crm", icon: Contact, status: "planned" },
+  { key: "users", label: "Benutzer", href: "/users", icon: UserCog, status: "active", permission: "users.read" },
   { key: "settings", label: "Einstellungen", href: "/settings", icon: Settings, status: "active" },
 ];
