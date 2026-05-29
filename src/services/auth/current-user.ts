@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { AuthContext } from "@/lib/auth/permissions";
 import type { RoleKey, Permission } from "@/lib/auth/roles";
@@ -32,8 +33,13 @@ async function loadRolePermissions(
  * AuthContext für Permission-Gating. Liefert null, wenn nicht eingeloggt.
  *
  * Läuft mit der User-Session → RLS schützt die Abfragen.
+ *
+ * Mit React cache() memoisiert: Mehrfachaufrufe innerhalb DESSELBEN Requests
+ * (Layout + Seite + Navigation) teilen sich EIN Ergebnis statt jeweils eigene
+ * DB-Roundtrips zu machen → deutlich weniger Latenz pro Navigation.
  */
-export async function getCurrentUser(): Promise<AuthContext | null> {
+export const getCurrentUser = cache(
+  async function getCurrentUser(): Promise<AuthContext | null> {
   const supabase = await createClient();
 
   const {
@@ -70,7 +76,8 @@ export async function getCurrentUser(): Promise<AuthContext | null> {
     assignments,
     rolePermissions,
   };
-}
+  },
+);
 
 /** Wirft, wenn nicht eingeloggt. Für geschützte Server-Pfade. */
 export async function requireUser(): Promise<AuthContext> {
