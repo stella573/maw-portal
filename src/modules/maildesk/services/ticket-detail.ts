@@ -35,6 +35,11 @@ export interface TicketDetailAttachment {
   sizeBytes: number | null;
 }
 
+export interface AssignableAgent {
+  profileId: string;
+  name: string;
+}
+
 export interface TicketDetail {
   id: string;
   reference: string;
@@ -45,10 +50,14 @@ export interface TicketDetail {
   mailboxName: string | null;
   customerEmail: string | null;
   customerName: string | null;
+  assigneeId: string | null;
+  assigneeName: string | null;
   createdAt: string;
   messages: TicketDetailMessage[];
   notes: TicketDetailNote[];
   attachments: TicketDetailAttachment[];
+  /** Mitglieder des Postfachs – mögliche Bearbeiter für die Zuweisung. */
+  assignableAgents: AssignableAgent[];
 }
 
 /**
@@ -63,7 +72,7 @@ export async function getTicketDetail(
   const { data: ticket } = await supabase
     .from("tickets")
     .select(
-      "id, reference, subject, status, priority, mailbox_id, created_at, customers(email, full_name), mailboxes(name)",
+      "id, reference, subject, status, priority, mailbox_id, assignee_id, created_at, customers(email, full_name), mailboxes(name)",
     )
     .eq("id", ticketId)
     .maybeSingle();
@@ -90,6 +99,45 @@ export async function getTicketDetail(
     .eq("ticket_id", ticketId)
     .order("created_at", { ascending: true });
 
+  // Zuweisbare Bearbeiter = Mitglieder des Postfachs (RLS lässt nur erlaubte zu).
+  let assignableAgents: AssignableAgent[] = [];
+  if (ticket.mailbox_id) {
+    const { data: members } = await supabase
+      .from("mailbox_members")
+      .select("profile_id, profiles(full_name, email)")
+      .eq("mailbox_id", ticket.mailbox_id);
+    assignableAgents = (members ?? [])
+      .map((m) => {
+        const p = m.profiles as unknown as {
+          full_name: string | null;
+          email: string;
+        } | null;
+        return {
+          profileId: m.profile_id,
+          name: p?.full_name ?? p?.email ?? "—",
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // Name des aktuellen Bearbeiters auflösen (falls gesetzt).
+  let assigneeName: string | null = null;
+  if (ticket.assignee_id) {
+    const fromList = assignableAgents.find(
+      (a) => a.profileId === ticket.assignee_id,
+    );
+    if (fromList) {
+      assigneeName = fromList.name;
+    } else {
+      const { data: ap } = await supabase
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", ticket.assignee_id)
+        .maybeSingle();
+      assigneeName = ap?.full_name ?? ap?.email ?? null;
+    }
+  }
+
   const customer = ticket.customers as unknown as {
     email: string;
     full_name: string | null;
@@ -106,6 +154,8 @@ export async function getTicketDetail(
     mailboxName: mailbox?.name ?? null,
     customerEmail: customer?.email ?? null,
     customerName: customer?.full_name ?? null,
+    assigneeId: ticket.assignee_id,
+    assigneeName,
     createdAt: ticket.created_at,
     messages: (messages ?? []).map((m) => {
       const author = m.profiles as unknown as { full_name: string | null } | null;
@@ -138,5 +188,6 @@ export async function getTicketDetail(
       contentType: a.content_type,
       sizeBytes: a.size_bytes,
     })),
+    assignableAgents,
   };
 }

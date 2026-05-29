@@ -3,7 +3,7 @@
 import { useActionState, useRef, useState } from "react";
 import { ArrowLeft, StickyNote, Paperclip } from "lucide-react";
 import Link from "next/link";
-import { updateTicket, addNote } from "./actions";
+import { updateTicket, addNote, assignTicket } from "./actions";
 import {
   TICKET_STATUS_LABELS,
   TICKET_PRIORITY_LABELS,
@@ -152,7 +152,60 @@ function TicketControls({ ticket }: { ticket: TicketDetail }) {
           </p>
         )}
       </form>
+
+      <AssignControl ticket={ticket} />
     </div>
+  );
+}
+
+/** Zuweisung des Tickets an ein Postfach-Mitglied. */
+function AssignControl({ ticket }: { ticket: TicketDetail }) {
+  const [result, action, pending] = useActionState(assignTicket, null);
+  return (
+    <form action={action} className="mt-4 border-t border-[var(--border)] pt-3">
+      <input type="hidden" name="ticketId" value={ticket.id} />
+      <label className="block text-xs text-[var(--muted)]">Zugewiesen an</label>
+      <div className="mt-1 flex gap-2">
+        <select
+          name="assigneeId"
+          defaultValue={ticket.assigneeId ?? ""}
+          className="min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-transparent px-2 py-2 text-sm outline-none focus:border-brand-500"
+        >
+          <option value="">— niemand —</option>
+          {ticket.assignableAgents.map((a) => (
+            <option key={a.profileId} value={a.profileId}>
+              {a.name}
+            </option>
+          ))}
+          {/* aktueller Bearbeiter, der (noch) kein Postfach-Mitglied ist */}
+          {ticket.assigneeId &&
+            !ticket.assignableAgents.some((a) => a.profileId === ticket.assigneeId) && (
+              <option value={ticket.assigneeId}>
+                {ticket.assigneeName ?? "Aktueller Bearbeiter"}
+              </option>
+            )}
+        </select>
+        <button
+          type="submit"
+          disabled={pending}
+          className="shrink-0 rounded-lg border border-[var(--border)] px-3 py-2 text-sm transition hover:bg-[var(--background)] disabled:opacity-60"
+        >
+          {pending ? "…" : "Setzen"}
+        </button>
+      </div>
+      {ticket.assignableAgents.length === 0 && (
+        <p className="mt-1 text-xs text-[var(--muted)]">
+          Keine Postfach-Mitglieder – unter Einstellungen → Postfächer zuweisen.
+        </p>
+      )}
+      {result && (
+        <p
+          className={`mt-2 text-sm ${result.ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}
+        >
+          {result.message}
+        </p>
+      )}
+    </form>
   );
 }
 

@@ -127,3 +127,58 @@ export async function addNote(
     return { ok: false, message: "Unerwarteter Fehler." };
   }
 }
+
+// ----------------------------------------------------------------------------
+// Ticket zuweisen / Zuweisung aufheben
+// ----------------------------------------------------------------------------
+const assignSchema = z.object({
+  ticketId: z.string().uuid(),
+  // leerer String = Zuweisung aufheben
+  assigneeId: z.string().uuid().optional().or(z.literal("")),
+});
+
+export async function assignTicket(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    const ctx = await getCurrentUser();
+    if (!ctx) return { ok: false, message: "Nicht authentifiziert." };
+
+    const parsed = assignSchema.safeParse({
+      ticketId: formData.get("ticketId"),
+      assigneeId: formData.get("assigneeId") ?? "",
+    });
+    if (!parsed.success) return { ok: false, message: "Ungültige Eingabe." };
+
+    const assigneeId = parsed.data.assigneeId ? parsed.data.assigneeId : null;
+
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("tickets")
+      .update({ assignee_id: assigneeId })
+      .eq("id", parsed.data.ticketId);
+    if (error) {
+      return {
+        ok: false,
+        message: /policy|permission|row-level/i.test(error.message)
+          ? "Keine Berechtigung."
+          : error.message,
+      };
+    }
+
+    await logAudit({
+      action: "ticket.assigned",
+      entityType: "ticket",
+      entityId: parsed.data.ticketId,
+      metadata: { assignee_id: assigneeId },
+    });
+
+    revalidatePath(`/maildesk/${parsed.data.ticketId}`);
+    revalidatePath("/maildesk");
+    return { ok: true, message: assigneeId ? "Zugewiesen." : "Zuweisung aufgehoben." };
+  } catch (err) {
+    console.error("[ticket.assignTicket]", err);
+    return { ok: false, message: "Unerwarteter Fehler." };
+  }
+}
