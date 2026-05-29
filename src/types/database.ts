@@ -1,10 +1,19 @@
 /**
  * Datenbank-Typen für den typisierten Supabase-Client.
  *
- * Hand-gepflegt für Phase 1. Sobald die Migrationen produktiv laufen, kann
- * diese Datei durch `supabase gen types typescript --linked` ersetzt werden.
- * Struktur folgt dem von @supabase/ssr erwarteten Schema.
+ * Hand-gepflegt für Phase 1, in der Struktur, die `supabase gen types
+ * typescript` erzeugt (inkl. `__InternalSupabase`, inline Timestamp-Spalten,
+ * explizite Insert/Update). Sobald die Migrationen produktiv laufen, kann die
+ * Datei durch `supabase gen types typescript --linked` ersetzt werden.
  */
+
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
 
 export type TicketStatus = "open" | "pending" | "resolved";
 export type TicketPriority = "low" | "normal" | "high" | "urgent";
@@ -25,9 +34,10 @@ export type AuditAction =
   | "role.revoked"
   | "entity.deleted";
 
-type Timestamps = { created_at: string; updated_at: string };
-
-export interface Database {
+export type Database = {
+  __InternalSupabase: {
+    PostgrestVersion: "12";
+  };
   public: {
     Tables: {
       locations: {
@@ -38,7 +48,9 @@ export interface Database {
           city: string | null;
           address: string | null;
           is_active: boolean;
-        } & Timestamps;
+          created_at: string;
+          updated_at: string;
+        };
         Insert: {
           id?: string;
           name: string;
@@ -46,8 +58,19 @@ export interface Database {
           city?: string | null;
           address?: string | null;
           is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
         };
-        Update: Partial<Database["public"]["Tables"]["locations"]["Insert"]>;
+        Update: {
+          id?: string;
+          name?: string;
+          slug?: string;
+          city?: string | null;
+          address?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       profiles: {
@@ -57,15 +80,27 @@ export interface Database {
           full_name: string | null;
           avatar_url: string | null;
           is_active: boolean;
-        } & Timestamps;
+          created_at: string;
+          updated_at: string;
+        };
         Insert: {
           id: string;
           email: string;
           full_name?: string | null;
           avatar_url?: string | null;
           is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
         };
-        Update: Partial<Database["public"]["Tables"]["profiles"]["Insert"]>;
+        Update: {
+          id?: string;
+          email?: string;
+          full_name?: string | null;
+          avatar_url?: string | null;
+          is_active?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       roles: {
@@ -85,20 +120,53 @@ export interface Database {
           description?: string | null;
           rank?: number;
           is_system?: boolean;
+          created_at?: string;
         };
-        Update: Partial<Database["public"]["Tables"]["roles"]["Insert"]>;
+        Update: {
+          id?: string;
+          key?: string;
+          name?: string;
+          description?: string | null;
+          rank?: number;
+          is_system?: boolean;
+          created_at?: string;
+        };
         Relationships: [];
       };
       permissions: {
-        Row: { id: string; key: string; description: string | null; created_at: string };
-        Insert: { id?: string; key: string; description?: string | null };
-        Update: Partial<Database["public"]["Tables"]["permissions"]["Insert"]>;
+        Row: {
+          id: string;
+          key: string;
+          description: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          key: string;
+          description?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          key?: string;
+          description?: string | null;
+          created_at?: string;
+        };
         Relationships: [];
       };
       role_permissions: {
-        Row: { role_id: string; permission_id: string };
-        Insert: { role_id: string; permission_id: string };
-        Update: Partial<{ role_id: string; permission_id: string }>;
+        Row: {
+          role_id: string;
+          permission_id: string;
+        };
+        Insert: {
+          role_id: string;
+          permission_id: string;
+        };
+        Update: {
+          role_id?: string;
+          permission_id?: string;
+        };
         Relationships: [];
       };
       user_roles: {
@@ -114,8 +182,15 @@ export interface Database {
           profile_id: string;
           role_id: string;
           location_id?: string | null;
+          created_at?: string;
         };
-        Update: Partial<Database["public"]["Tables"]["user_roles"]["Insert"]>;
+        Update: {
+          id?: string;
+          profile_id?: string;
+          role_id?: string;
+          location_id?: string | null;
+          created_at?: string;
+        };
         Relationships: [];
       };
       customers: {
@@ -124,22 +199,49 @@ export interface Database {
           email: string;
           full_name: string | null;
           phone: string | null;
-          metadata: Record<string, unknown>;
-        } & Timestamps;
+          metadata: Json;
+          created_at: string;
+          updated_at: string;
+        };
         Insert: {
           id?: string;
           email: string;
           full_name?: string | null;
           phone?: string | null;
-          metadata?: Record<string, unknown>;
+          metadata?: Json;
+          created_at?: string;
+          updated_at?: string;
         };
-        Update: Partial<Database["public"]["Tables"]["customers"]["Insert"]>;
+        Update: {
+          id?: string;
+          email?: string;
+          full_name?: string | null;
+          phone?: string | null;
+          metadata?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       tags: {
-        Row: { id: string; name: string; color: string; created_at: string };
-        Insert: { id?: string; name: string; color?: string };
-        Update: Partial<Database["public"]["Tables"]["tags"]["Insert"]>;
+        Row: {
+          id: string;
+          name: string;
+          color: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          name: string;
+          color?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          name?: string;
+          color?: string;
+          created_at?: string;
+        };
         Relationships: [];
       };
       tickets: {
@@ -154,7 +256,9 @@ export interface Database {
           assignee_id: string | null;
           created_by: string | null;
           last_message_at: string | null;
-        } & Timestamps;
+          created_at: string;
+          updated_at: string;
+        };
         Insert: {
           id?: string;
           reference?: string;
@@ -166,8 +270,23 @@ export interface Database {
           assignee_id?: string | null;
           created_by?: string | null;
           last_message_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
         };
-        Update: Partial<Database["public"]["Tables"]["tickets"]["Insert"]>;
+        Update: {
+          id?: string;
+          reference?: string;
+          subject?: string;
+          status?: TicketStatus;
+          priority?: TicketPriority;
+          customer_id?: string | null;
+          location_id?: string | null;
+          assignee_id?: string | null;
+          created_by?: string | null;
+          last_message_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       messages: {
@@ -184,7 +303,7 @@ export interface Database {
           body_html: string | null;
           is_draft: boolean;
           provider_id: string | null;
-          raw: Record<string, unknown> | null;
+          raw: Json | null;
           created_at: string;
         };
         Insert: {
@@ -200,9 +319,25 @@ export interface Database {
           body_html?: string | null;
           is_draft?: boolean;
           provider_id?: string | null;
-          raw?: Record<string, unknown> | null;
+          raw?: Json | null;
+          created_at?: string;
         };
-        Update: Partial<Database["public"]["Tables"]["messages"]["Insert"]>;
+        Update: {
+          id?: string;
+          ticket_id?: string;
+          direction?: MessageDirection;
+          channel?: MessageChannel;
+          author_id?: string | null;
+          from_email?: string | null;
+          to_email?: string | null;
+          subject?: string | null;
+          body_text?: string | null;
+          body_html?: string | null;
+          is_draft?: boolean;
+          provider_id?: string | null;
+          raw?: Json | null;
+          created_at?: string;
+        };
         Relationships: [];
       };
       notes: {
@@ -213,14 +348,35 @@ export interface Database {
           body: string;
           created_at: string;
         };
-        Insert: { id?: string; ticket_id: string; author_id?: string | null; body: string };
-        Update: Partial<Database["public"]["Tables"]["notes"]["Insert"]>;
+        Insert: {
+          id?: string;
+          ticket_id: string;
+          author_id?: string | null;
+          body: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          ticket_id?: string;
+          author_id?: string | null;
+          body?: string;
+          created_at?: string;
+        };
         Relationships: [];
       };
       ticket_tags: {
-        Row: { ticket_id: string; tag_id: string };
-        Insert: { ticket_id: string; tag_id: string };
-        Update: Partial<{ ticket_id: string; tag_id: string }>;
+        Row: {
+          ticket_id: string;
+          tag_id: string;
+        };
+        Insert: {
+          ticket_id: string;
+          tag_id: string;
+        };
+        Update: {
+          ticket_id?: string;
+          tag_id?: string;
+        };
         Relationships: [];
       };
       templates: {
@@ -231,7 +387,9 @@ export interface Database {
           body: string;
           location_id: string | null;
           created_by: string | null;
-        } & Timestamps;
+          created_at: string;
+          updated_at: string;
+        };
         Insert: {
           id?: string;
           name: string;
@@ -239,8 +397,19 @@ export interface Database {
           body: string;
           location_id?: string | null;
           created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
         };
-        Update: Partial<Database["public"]["Tables"]["templates"]["Insert"]>;
+        Update: {
+          id?: string;
+          name?: string;
+          subject?: string | null;
+          body?: string;
+          location_id?: string | null;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
         Relationships: [];
       };
       attachments: {
@@ -262,8 +431,18 @@ export interface Database {
           file_name: string;
           content_type?: string | null;
           size_bytes?: number | null;
+          created_at?: string;
         };
-        Update: Partial<Database["public"]["Tables"]["attachments"]["Insert"]>;
+        Update: {
+          id?: string;
+          message_id?: string | null;
+          ticket_id?: string | null;
+          storage_path?: string;
+          file_name?: string;
+          content_type?: string | null;
+          size_bytes?: number | null;
+          created_at?: string;
+        };
         Relationships: [];
       };
       audit_logs: {
@@ -274,12 +453,12 @@ export interface Database {
           entity_type: string | null;
           entity_id: string | null;
           location_id: string | null;
-          metadata: Record<string, unknown>;
+          metadata: Json;
           ip: string | null;
           created_at: string;
         };
         // Direkte Inserts/Updates sind per RLS gesperrt – ausschließlich über
-        // public.log_audit() schreiben. Der Typ beschreibt die Spalten nur
+        // public.log_audit() schreiben. Die Typen beschreiben die Spalten nur
         // der Vollständigkeit halber.
         Insert: {
           id?: string;
@@ -288,14 +467,27 @@ export interface Database {
           entity_type?: string | null;
           entity_id?: string | null;
           location_id?: string | null;
-          metadata?: Record<string, unknown>;
+          metadata?: Json;
           ip?: string | null;
+          created_at?: string;
         };
-        Update: Partial<Database["public"]["Tables"]["audit_logs"]["Insert"]>;
+        Update: {
+          id?: string;
+          actor_profile_id?: string | null;
+          action?: AuditAction;
+          entity_type?: string | null;
+          entity_id?: string | null;
+          location_id?: string | null;
+          metadata?: Json;
+          ip?: string | null;
+          created_at?: string;
+        };
         Relationships: [];
       };
     };
-    Views: Record<never, never>;
+    Views: {
+      [_ in never]: never;
+    };
     Functions: {
       log_audit: {
         Args: {
@@ -303,7 +495,7 @@ export interface Database {
           p_entity_type?: string | null;
           p_entity_id?: string | null;
           p_location_id?: string | null;
-          p_metadata?: Record<string, unknown>;
+          p_metadata?: Json;
         };
         Returns: string;
       };
@@ -315,14 +507,18 @@ export interface Database {
       message_channel: MessageChannel;
       audit_action: AuditAction;
     };
-    CompositeTypes: Record<never, never>;
+    CompositeTypes: {
+      [_ in never]: never;
+    };
   };
-}
+};
+
+type PublicSchema = Database["public"];
 
 // Komfort-Aliase
-export type Tables<T extends keyof Database["public"]["Tables"]> =
-  Database["public"]["Tables"][T]["Row"];
-export type InsertDto<T extends keyof Database["public"]["Tables"]> =
-  Database["public"]["Tables"][T]["Insert"];
-export type UpdateDto<T extends keyof Database["public"]["Tables"]> =
-  Database["public"]["Tables"][T]["Update"];
+export type Tables<T extends keyof PublicSchema["Tables"]> =
+  PublicSchema["Tables"][T]["Row"];
+export type InsertDto<T extends keyof PublicSchema["Tables"]> =
+  PublicSchema["Tables"][T]["Insert"];
+export type UpdateDto<T extends keyof PublicSchema["Tables"]> =
+  PublicSchema["Tables"][T]["Update"];
