@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/services/auth/current-user";
 import { can } from "@/lib/auth/permissions";
 import { getResend, getFromEmail } from "@/lib/resend/client";
+import { renderEmailHtml } from "@/lib/resend/email-template";
 import { logAudit } from "@/lib/audit/log";
 
 /**
@@ -95,7 +96,10 @@ export async function POST(request: NextRequest) {
   }
 
   const subject = subjectWithReference(ticket.subject, ticket.reference);
+  // Schlichtes HTML für die In-App-Ansicht (Verlauf), volles MAW-Template für
+  // den tatsächlichen Mailversand.
   const bodyHtml = `<div style="white-space:pre-wrap">${escapeHtml(input.bodyText)}</div>`;
+  const emailHtml = renderEmailHtml(input.bodyText);
 
   // Versand
   let providerId: string | null = null;
@@ -106,7 +110,7 @@ export async function POST(request: NextRequest) {
       to,
       subject,
       text: input.bodyText,
-      html: bodyHtml,
+      html: emailHtml,
       ...(mailbox?.email ? { replyTo: mailbox.email } : {}),
     });
     if (error) throw new Error(error.message);
