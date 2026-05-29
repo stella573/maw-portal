@@ -40,7 +40,11 @@ export type AuditAction =
   | "user.created"
   | "user.updated"
   | "mfa.reset_by_admin"
-  | "auth.password_changed";
+  | "auth.password_changed"
+  | "mailbox.created"
+  | "mailbox.updated"
+  | "mailbox.member_added"
+  | "mailbox.member_removed";
 
 export type Database = {
   __InternalSupabase: {

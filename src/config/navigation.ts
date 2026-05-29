@@ -9,6 +9,7 @@ import {
   Contact,
   Settings,
   UserCog,
+  Mailbox,
   type LucideIcon,
 } from "lucide-react";
 import type { Permission } from "@/lib/auth/roles";
@@ -35,6 +36,7 @@ export interface NavItem {
 export const NAVIGATION: NavItem[] = [
   { key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, status: "active" },
   { key: "maildesk", label: "MailDesk", href: "/maildesk", icon: Inbox, status: "active", permission: "tickets.read" },
+  { key: "mailboxes", label: "Postfächer", href: "/mailboxes", icon: Mailbox, status: "active", permission: "mailboxes.manage" },
   { key: "employees", label: "Mitarbeiter", href: "/employees", icon: Users, status: "planned" },
   { key: "schedule", label: "Dienstplan", href: "/schedule", icon: CalendarDays, status: "planned" },
   { key: "tasks", label: "Aufgaben", href: "/tasks", icon: CheckSquare, status: "planned" },

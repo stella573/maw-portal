@@ -21,6 +21,10 @@ alter type public.audit_action add value if not exists 'user.created';
 alter type public.audit_action add value if not exists 'user.updated';
 alter type public.audit_action add value if not exists 'mfa.reset_by_admin';
 alter type public.audit_action add value if not exists 'auth.password_changed';
+alter type public.audit_action add value if not exists 'mailbox.created';
+alter type public.audit_action add value if not exists 'mailbox.updated';
+alter type public.audit_action add value if not exists 'mailbox.member_added';
+alter type public.audit_action add value if not exists 'mailbox.member_removed';
 
 -- ===== 0007: Postfächer + Mitgliedschaften =================================
 
