@@ -3,13 +3,21 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
+type Mode = "password" | "magic";
+type Status = "idle" | "submitting" | "sent" | "error";
+
 /**
- * Minimale Login-Seite (Magic Link). Bewusst schlank gehalten – das
- * vollständige Auth-/Onboarding-UI folgt in Phase 1.2.
+ * Login-Seite für das interne Portal.
+ *
+ * Primär: E-Mail + Passwort (robust in Firmenumgebungen – E-Mail-Scanner
+ * können keine Einmal-Tokens "verbrauchen"). Magic Link bleibt als optionaler
+ * Fallback verfügbar.
  */
 export default function LoginPage() {
+  const [mode, setMode] = useState<Mode>("password");
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
 
   // Fehler aus der Callback-Route (?error=...) anzeigen.
@@ -21,21 +29,46 @@ export default function LoginPage() {
       setMessage(
         err === "missing_code"
           ? "Anmeldelink ungültig oder abgelaufen. Bitte erneut anfordern."
-          : err,
+          : decodeURIComponent(err),
       );
     }
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
+  function redirectTarget(): string {
+    const params = new URLSearchParams(window.location.search);
+    const next = params.get("redirectTo");
+    return next && next.startsWith("/") ? next : "/dashboard";
+  }
+
+  async function handlePassword(e: React.FormEvent) {
     e.preventDefault();
-    setStatus("sending");
+    setStatus("submitting");
+    setMessage("");
     const supabase = createClient();
-    // Origin dynamisch aus dem Browser – passt immer zur tatsächlichen Domain
-    // (lokal wie Vercel). Der Magic Link führt zur Callback-Route, die den
-    // Code gegen eine Session eintauscht.
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setStatus("error");
+      setMessage(
+        error.message === "Invalid login credentials"
+          ? "E-Mail oder Passwort ist falsch."
+          : error.message,
+      );
+      return;
+    }
+    // Volle Navigation, damit die Middleware die frischen Cookies sofort sieht.
+    window.location.assign(redirectTarget());
+  }
+
+  async function handleMagic(e: React.FormEvent) {
+    e.preventDefault();
+    setStatus("submitting");
+    setMessage("");
+    const supabase = createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback?next=/dashboard` },
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTarget())}`,
+      },
     });
     if (error) {
       setStatus("error");
@@ -52,7 +85,10 @@ export default function LoginPage() {
         <h1 className="text-xl font-semibold">MAW Internal Portal</h1>
         <p className="mt-1 text-sm text-[var(--muted)]">Anmeldung für Mitarbeiter</p>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+        <form
+          onSubmit={mode === "password" ? handlePassword : handleMagic}
+          className="mt-6 space-y-4"
+        >
           <div>
             <label htmlFor="email" className="block text-sm font-medium">
               E-Mail
@@ -60,21 +96,61 @@ export default function LoginPage() {
             <input
               id="email"
               type="email"
+              autoComplete="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="mt-1 w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-brand-500"
-              placeholder="name@entertainmentwizards.de"
+              placeholder="name@miningadventureworld.de"
             />
           </div>
+
+          {mode === "password" && (
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium">
+                Passwort
+              </label>
+              <input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-brand-500"
+                placeholder="••••••••"
+              />
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={status === "sending"}
+            disabled={status === "submitting"}
             className="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
           >
-            {status === "sending" ? "Sende…" : "Magic Link senden"}
+            {status === "submitting"
+              ? mode === "password"
+                ? "Anmelden…"
+                : "Sende…"
+              : mode === "password"
+                ? "Anmelden"
+                : "Magic Link senden"}
           </button>
         </form>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMode((m) => (m === "password" ? "magic" : "password"));
+            setStatus("idle");
+            setMessage("");
+          }}
+          className="mt-4 text-xs text-[var(--muted)] underline-offset-2 hover:underline"
+        >
+          {mode === "password"
+            ? "Stattdessen Magic Link per E-Mail"
+            : "Stattdessen mit Passwort anmelden"}
+        </button>
 
         {message && (
           <p
