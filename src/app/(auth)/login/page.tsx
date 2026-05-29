@@ -26,12 +26,6 @@ export default function LoginPage() {
     }
   }, []);
 
-  function redirectTarget(): string {
-    const params = new URLSearchParams(window.location.search);
-    const next = params.get("redirectTo");
-    return next && next.startsWith("/") ? next : "/dashboard";
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("submitting");
@@ -47,8 +41,10 @@ export default function LoginPage() {
       );
       return;
     }
+    // Nach Passwort ist die Session erst aal1. Die 2FA-Seite entscheidet, ob
+    // Einrichtung oder Code-Abfrage nötig ist, und leitet bei Erfolg weiter.
     // Volle Navigation, damit die Middleware die frischen Cookies sofort sieht.
-    window.location.assign(redirectTarget());
+    window.location.assign("/security/2fa");
   }
 
   return (

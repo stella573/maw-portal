@@ -781,6 +781,16 @@ create policy attachments_write on public.attachments
 create policy audit_select on public.audit_logs
   for select using (private.has_permission('audit.read'));
 -- ============================================================================
+-- 0006 · MFA-bezogene Audit-Aktionen
+-- ============================================================================
+-- Erweitert das audit_action-Enum um Zwei-Faktor-Ereignisse.
+-- ALTER TYPE ... ADD VALUE ist idempotent über IF NOT EXISTS.
+
+alter type public.audit_action add value if not exists 'mfa.enrolled';
+alter type public.audit_action add value if not exists 'mfa.verified';
+alter type public.audit_action add value if not exists 'mfa.unenrolled';
+alter type public.audit_action add value if not exists 'mfa.challenge_failed';
+-- ============================================================================
 -- Seed · Rollen, Rechte, Rollen-Rechte-Matrix, Demo-Standort
 -- Idempotent: kann mehrfach ausgeführt werden.
 -- ============================================================================

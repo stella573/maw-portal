@@ -1,12 +1,20 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { getCurrentUser } from "@/services/auth/current-user";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function SettingsPage() {
   const user = await getCurrentUser();
 
+  // 2FA-Status der aktuellen Session: verifizierte TOTP-Faktoren zählen.
+  const supabase = await createClient();
+  const { data: factors } = await supabase.auth.mfa.listFactors();
+  const verifiedTotp = (factors?.all ?? []).filter(
+    (f) => f.factor_type === "totp" && f.status === "verified",
+  );
+
   return (
     <div>
-      <PageHeader title="Einstellungen" description="Konto & Portal-Konfiguration." />
+      <PageHeader title="Einstellungen" description="Konto & Sicherheit." />
 
       <div className="max-w-xl space-y-4">
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
@@ -31,8 +39,34 @@ export default async function SettingsPage() {
           </dl>
         </div>
 
+        <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+          <h2 className="text-sm font-medium">Sicherheit</h2>
+          <div className="mt-3 flex items-center justify-between text-sm">
+            <div>
+              <div className="font-medium">Zwei-Faktor-Authentifizierung</div>
+              <div className="text-[var(--muted)]">
+                Authenticator-App (TOTP) · für alle verpflichtend
+              </div>
+            </div>
+            {verifiedTotp.length > 0 ? (
+              <span className="rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                Aktiv
+              </span>
+            ) : (
+              <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+                Nicht eingerichtet
+              </span>
+            )}
+          </div>
+          <p className="mt-3 text-xs text-[var(--muted)]">
+            Geräteverwaltung (weiteres Gerät hinzufügen, zurücksetzen) folgt.
+            Ein Zurücksetzen ist über einen Owner/Admin möglich.
+          </p>
+        </div>
+
         <p className="text-sm text-[var(--muted)]">
-          Benutzer- und Rollenverwaltung folgen in Phase&nbsp;1.2.
+          Neue Mitarbeiter werden ausschließlich durch einen Owner angelegt.
+          Benutzer- und Rollenverwaltung folgen.
         </p>
       </div>
     </div>

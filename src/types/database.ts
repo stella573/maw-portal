@@ -32,7 +32,11 @@ export type AuditAction =
   | "note.created"
   | "role.assigned"
   | "role.revoked"
-  | "entity.deleted";
+  | "entity.deleted"
+  | "mfa.enrolled"
+  | "mfa.verified"
+  | "mfa.unenrolled"
+  | "mfa.challenge_failed";
 
 export type Database = {
   __InternalSupabase: {
