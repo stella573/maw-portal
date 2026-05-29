@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { ArrowLeft, StickyNote } from "lucide-react";
 import Link from "next/link";
 import { updateTicket, addNote } from "./actions";
@@ -240,7 +240,12 @@ function stripHtml(html: string | null): string {
     .trim();
 }
 
-/** Rendert den Nachrichtentext; fällt auf HTML-Strip zurück, sonst Hinweis. */
+/**
+ * Rendert den Nachrichteninhalt. Bevorzugt echtes HTML (z. B. Buchungs-/
+ * System-Mails) in einem abgeschotteten iframe – das blockiert Scripts in der
+ * Fremd-Mail (XSS-Schutz) und kapselt deren CSS vom Portal. Ohne HTML wird der
+ * Reintext angezeigt. Ein Umschalter erlaubt die reine Textansicht.
+ */
 function MessageBody({
   text,
   html,
@@ -248,13 +253,75 @@ function MessageBody({
   text: string | null;
   html: string | null;
 }) {
-  const content = (text && text.trim()) || stripHtml(html);
-  if (!content) {
+  const hasHtml = !!(html && html.trim());
+  const plain = (text && text.trim()) || stripHtml(html);
+  const [showHtml, setShowHtml] = useState(hasHtml);
+
+  if (!hasHtml && !plain) {
     return (
       <p className="text-sm italic text-[var(--muted)]">
-        (Kein Textinhalt – evtl. nur HTML/Anhang. Rohdaten liegen am Ticket vor.)
+        (Kein Textinhalt – evtl. nur Anhang. Rohdaten liegen am Ticket vor.)
       </p>
     );
   }
-  return <div className="whitespace-pre-wrap break-words text-sm">{content}</div>;
+
+  return (
+    <div>
+      {hasHtml && showHtml ? (
+        <HtmlMessage html={html!} />
+      ) : (
+        <div className="whitespace-pre-wrap break-words text-sm">{plain}</div>
+      )}
+      {hasHtml && (
+        <button
+          type="button"
+          onClick={() => setShowHtml((v) => !v)}
+          className="mt-2 text-xs text-[var(--muted)] underline-offset-2 hover:underline"
+        >
+          {showHtml ? "Als Text anzeigen" : "Als HTML anzeigen"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Zeigt E-Mail-HTML in einem gesandboxten iframe.
+ * - sandbox="allow-same-origin" (OHNE allow-scripts): Scripts der Mail laufen
+ *   NICHT, aber wir können die Höhe automatisch anpassen.
+ * - srcDoc kapselt das Mail-HTML komplett vom Portal-CSS.
+ */
+function HtmlMessage({ html }: { html: string }) {
+  const ref = useRef<HTMLIFrameElement>(null);
+  const [height, setHeight] = useState(120);
+
+  function handleLoad() {
+    try {
+      const doc = ref.current?.contentDocument;
+      if (doc?.body) {
+        // weißer Hintergrund, damit Mails mit transparentem BG lesbar sind
+        const h = Math.min(doc.body.scrollHeight + 16, 1400);
+        setHeight(h);
+      }
+    } catch {
+      /* Höhe konnte nicht gelesen werden – Standardhöhe bleibt */
+    }
+  }
+
+  const srcDoc = `<!doctype html><html><head><meta charset="utf-8">
+<base target="_blank">
+<style>html,body{margin:0;padding:8px;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;word-break:break-word;} img{max-width:100%;height:auto;} a{color:#1d4ed8;}</style>
+</head><body>${html}</body></html>`;
+
+  return (
+    <iframe
+      ref={ref}
+      onLoad={handleLoad}
+      sandbox="allow-same-origin allow-popups"
+      srcDoc={srcDoc}
+      title="E-Mail-Inhalt"
+      className="w-full rounded-lg border border-[var(--border)] bg-white"
+      style={{ height }}
+    />
+  );
 }
