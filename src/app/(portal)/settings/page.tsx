@@ -1,4 +1,3 @@
-import { PageHeader } from "@/components/layout/page-header";
 import { getCurrentUser } from "@/services/auth/current-user";
 import { createClient } from "@/lib/supabase/server";
 
@@ -14,8 +13,6 @@ export default async function SettingsPage() {
 
   return (
     <div>
-      <PageHeader title="Einstellungen" description="Konto & Sicherheit." />
-
       <div className="max-w-xl space-y-4">
         <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
           <h2 className="text-sm font-medium">Konto</h2>
@@ -65,8 +62,8 @@ export default async function SettingsPage() {
         </div>
 
         <p className="text-sm text-[var(--muted)]">
-          Neue Mitarbeiter werden ausschließlich durch einen Owner angelegt.
-          Benutzer- und Rollenverwaltung folgen.
+          Benutzer-, Postfach- und Rechteverwaltung findest du in der
+          Seitennavigation links.
         </p>
       </div>
     </div>

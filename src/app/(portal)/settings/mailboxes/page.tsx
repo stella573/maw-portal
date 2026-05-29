@@ -1,4 +1,3 @@
-import { PageHeader } from "@/components/layout/page-header";
 import { getCurrentUser } from "@/services/auth/current-user";
 import { can } from "@/lib/auth/permissions";
 import {
@@ -18,12 +17,9 @@ export default async function MailboxesPage() {
 
   if (!ctx || !can(ctx, "mailboxes.manage")) {
     return (
-      <div>
-        <PageHeader title="Postfächer" />
-        <p className="text-sm text-[var(--muted)]">
-          Du hast keine Berechtigung, Postfächer zu verwalten.
-        </p>
-      </div>
+      <p className="text-sm text-[var(--muted)]">
+        Du hast keine Berechtigung, Postfächer zu verwalten.
+      </p>
     );
   }
 
@@ -34,11 +30,13 @@ export default async function MailboxesPage() {
   ]);
 
   return (
-    <div>
-      <PageHeader
-        title="Postfächer"
-        description="Funktions-/Team-Postfächer anlegen und Mitarbeiter zuweisen."
-      />
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-base font-semibold">Postfächer</h2>
+        <p className="text-sm text-[var(--muted)]">
+          Funktions-/Team-Postfächer anlegen und Mitarbeiter zuweisen.
+        </p>
+      </div>
       <MailboxAdmin
         mailboxes={mailboxes}
         profiles={profiles}

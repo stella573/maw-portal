@@ -80,7 +80,7 @@ export async function createMailbox(
       metadata: { name: input.name, email: input.email },
     });
 
-    revalidatePath("/mailboxes");
+    revalidatePath("/settings/mailboxes");
     return { ok: true, message: `Postfach „${input.name}“ wurde angelegt.` };
   } catch (err) {
     return forbidden(err) ?? { ok: false, message: "Unerwarteter Fehler." };
@@ -114,7 +114,7 @@ export async function setMailboxActive(
       metadata: { is_active: active },
     });
 
-    revalidatePath("/mailboxes");
+    revalidatePath("/settings/mailboxes");
     return { ok: true, message: active ? "Postfach aktiviert." : "Postfach deaktiviert." };
   } catch (err) {
     return forbidden(err) ?? { ok: false, message: "Unerwarteter Fehler." };
@@ -162,7 +162,7 @@ export async function addMember(
       metadata: { profile_id: parsed.data.profileId },
     });
 
-    revalidatePath("/mailboxes");
+    revalidatePath("/settings/mailboxes");
     return { ok: true, message: "Mitglied hinzugefügt." };
   } catch (err) {
     return forbidden(err) ?? { ok: false, message: "Unerwarteter Fehler." };
@@ -199,7 +199,7 @@ export async function removeMember(
       metadata: { profile_id: parsed.data.profileId },
     });
 
-    revalidatePath("/mailboxes");
+    revalidatePath("/settings/mailboxes");
     return { ok: true, message: "Mitglied entfernt." };
   } catch (err) {
     return forbidden(err) ?? { ok: false, message: "Unerwarteter Fehler." };

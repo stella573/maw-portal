@@ -113,7 +113,7 @@ export async function createEmployee(
       metadata: { created_user: input.email, role: role.key },
     });
 
-    revalidatePath("/users");
+    revalidatePath("/settings/users");
     return { ok: true, message: `${input.email} wurde angelegt.` };
   } catch (err) {
     if (err instanceof Error && err.message === "FORBIDDEN") {
@@ -181,7 +181,7 @@ export async function assignRole(
       metadata: { role: role.key },
     });
 
-    revalidatePath("/users");
+    revalidatePath("/settings/users");
     return { ok: true, message: "Rolle zugewiesen." };
   } catch (err) {
     if (err instanceof Error && err.message === "FORBIDDEN") {
@@ -245,7 +245,7 @@ export async function revokeRole(
       metadata: { role: targetRoleKey },
     });
 
-    revalidatePath("/users");
+    revalidatePath("/settings/users");
     return { ok: true, message: "Rolle entzogen." };
   } catch (err) {
     if (err instanceof Error && err.message === "FORBIDDEN") {
@@ -287,7 +287,7 @@ export async function setActive(
       metadata: { is_active: active },
     });
 
-    revalidatePath("/users");
+    revalidatePath("/settings/users");
     return { ok: true, message: active ? "Mitarbeiter aktiviert." : "Mitarbeiter deaktiviert." };
   } catch (err) {
     if (err instanceof Error && err.message === "FORBIDDEN") {
@@ -342,7 +342,7 @@ export async function resetMfa(
       metadata: { removed_factors: all.length, by: actor.email },
     });
 
-    revalidatePath("/users");
+    revalidatePath("/settings/users");
     return { ok: true, message: "2FA zurückgesetzt. Mitarbeiter richtet beim nächsten Login neu ein." };
   } catch (err) {
     if (err instanceof Error && err.message === "FORBIDDEN") {

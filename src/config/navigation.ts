@@ -8,8 +8,6 @@ import {
   BookOpen,
   Contact,
   Settings,
-  UserCog,
-  Mailbox,
   type LucideIcon,
 } from "lucide-react";
 import type { Permission } from "@/lib/auth/roles";
@@ -36,13 +34,11 @@ export interface NavItem {
 export const NAVIGATION: NavItem[] = [
   { key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, status: "active" },
   { key: "maildesk", label: "MailDesk", href: "/maildesk", icon: Inbox, status: "active", permission: "tickets.read" },
-  { key: "mailboxes", label: "Postfächer", href: "/mailboxes", icon: Mailbox, status: "active", permission: "mailboxes.manage" },
   { key: "employees", label: "Mitarbeiter", href: "/employees", icon: Users, status: "planned" },
   { key: "schedule", label: "Dienstplan", href: "/schedule", icon: CalendarDays, status: "planned" },
   { key: "tasks", label: "Aufgaben", href: "/tasks", icon: CheckSquare, status: "planned" },
   { key: "checklists", label: "Checklisten", href: "/checklists", icon: ListChecks, status: "planned" },
   { key: "knowledge", label: "Wissensdatenbank", href: "/knowledge", icon: BookOpen, status: "planned" },
   { key: "crm", label: "CRM", href: "/crm", icon: Contact, status: "planned" },
-  { key: "users", label: "Benutzer", href: "/users", icon: UserCog, status: "active", permission: "users.read" },
   { key: "settings", label: "Einstellungen", href: "/settings", icon: Settings, status: "active" },
 ];
