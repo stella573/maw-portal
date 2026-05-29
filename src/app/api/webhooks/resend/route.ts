@@ -6,6 +6,7 @@ import {
   verifyResendSignature,
   extractEmail,
   extractTicketReference,
+  fetchReceivedEmail,
 } from "@/lib/resend/inbound";
 import type { Json } from "@/types/database";
 
@@ -120,14 +121,29 @@ export async function POST(request: NextRequest) {
   const mail = result.data;
   const raw = mail as Record<string, unknown>;
 
-  // Adressen tolerant lesen (String oder Objekt), dann reine E-Mail extrahieren.
-  const fromEmail = extractEmail(readAddress(mail.from) ?? raw.sender as string | undefined);
-  const toEmail = extractEmail(
+  // Adressen/Betreff tolerant aus dem Webhook lesen.
+  let fromEmail = extractEmail(readAddress(mail.from) ?? (raw.sender as string | undefined));
+  let toEmail = extractEmail(
     readAddress(mail.to) ?? (raw.recipient as string | undefined) ?? (raw["to_email"] as string | undefined),
   );
-  const subject =
-    mail.subject ?? (raw.Subject as string | undefined) ?? "(kein Betreff)";
-  const { text: bodyText, html: bodyHtml } = extractBody(raw);
+  let subject = mail.subject ?? (raw.Subject as string | undefined) ?? "(kein Betreff)";
+
+  // Resend-Inbound-Webhooks enthalten NUR Metadaten – der Body (text/html)
+  // fehlt und muss über die email_id nachgeladen werden.
+  let { text: bodyText, html: bodyHtml } = extractBody(raw);
+  const emailId =
+    (raw.email_id as string | undefined) ?? (raw.id as string | undefined) ?? mail.message_id;
+
+  if (!bodyText && !bodyHtml && emailId && env.RESEND_API_KEY) {
+    const full = await fetchReceivedEmail(emailId, env.RESEND_API_KEY);
+    if (full) {
+      bodyText = full.text ?? bodyText;
+      bodyHtml = full.html ?? bodyHtml;
+      if (!subject || subject === "(kein Betreff)") subject = full.subject ?? subject;
+      fromEmail = fromEmail ?? extractEmail(full.from ?? undefined);
+      toEmail = toEmail ?? extractEmail(full.to ?? undefined);
+    }
+  }
 
   if (!fromEmail) {
     return NextResponse.json({ error: "Absender fehlt" }, { status: 422 });

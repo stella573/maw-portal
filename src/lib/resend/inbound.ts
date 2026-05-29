@@ -81,3 +81,53 @@ export function extractTicketReference(subject: string | undefined): string | nu
   const m = subject.match(/MAW-[A-Z0-9]{8}/i);
   return m ? m[0].toUpperCase() : null;
 }
+
+export interface ReceivedEmailBody {
+  text: string | null;
+  html: string | null;
+  subject: string | null;
+  from: string | null;
+  to: string[] | null;
+}
+
+/**
+ * Lädt den vollständigen Inhalt einer eingegangenen Mail über die Resend-API
+ * nach. Resend-Inbound-Webhooks enthalten NUR Metadaten – Body (text/html)
+ * muss separat per email_id geholt werden:
+ *   GET https://api.resend.com/emails/receiving/{id}
+ *
+ * Direkt per fetch (das installierte SDK kennt receiving.get noch nicht).
+ */
+export async function fetchReceivedEmail(
+  emailId: string,
+  apiKey: string,
+): Promise<ReceivedEmailBody | null> {
+  try {
+    const res = await fetch(
+      `https://api.resend.com/emails/receiving/${encodeURIComponent(emailId)}`,
+      {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        // Inbound-Body kann groß sein; kein Cache.
+        cache: "no-store",
+      },
+    );
+    if (!res.ok) {
+      console.error(
+        `[resend] receiving.get ${emailId} → HTTP ${res.status} ${await res.text()}`,
+      );
+      return null;
+    }
+    const data = (await res.json()) as Record<string, unknown>;
+    const str = (x: unknown) => (typeof x === "string" && x.trim() ? x : null);
+    return {
+      text: str(data.text),
+      html: str(data.html),
+      subject: str(data.subject),
+      from: str(data.from),
+      to: Array.isArray(data.to) ? (data.to as string[]) : null,
+    };
+  } catch (err) {
+    console.error("[resend] fetchReceivedEmail Fehler:", err);
+    return null;
+  }
+}
