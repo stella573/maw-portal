@@ -1,12 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
-import type { AuditAction } from "@/types/database";
+import type { AuditAction, Json } from "@/types/database";
 
 export interface AuditEntry {
   action: AuditAction;
   entityType?: string | null;
   entityId?: string | null;
   locationId?: string | null;
-  metadata?: Record<string, unknown>;
+  /** Frei strukturierte Zusatzinfos – muss JSON-serialisierbar sein. */
+  metadata?: Json;
 }
 
 /**

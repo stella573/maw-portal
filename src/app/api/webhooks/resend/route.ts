@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getServerEnv } from "@/lib/env";
+import type { Json } from "@/types/database";
 
 /**
  * Resend Inbound-Webhook: eingehende E-Mails → customer/ticket/message.
@@ -118,7 +119,7 @@ export async function POST(request: NextRequest) {
     body_text: mail.text ?? null,
     body_html: mail.html ?? null,
     provider_id: mail.message_id ?? null,
-    raw: result.data as unknown as Record<string, unknown>,
+    raw: result.data as unknown as Json,
   });
 
   if (msgErr) {
