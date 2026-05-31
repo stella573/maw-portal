@@ -35,12 +35,21 @@ function asString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v : null;
 }
 
-/** department/office sind verschachtelt: { attributes: { name: { value } } }. */
+/**
+ * department/office kommen verschachtelt. Personio liefert i. d. R.:
+ *   { type, attributes: { id, name: "Dorsten" } }   ← name ist ein String
+ * teils auch als reiner String oder als { ..., name: { value } }. Robust gegen
+ * alle drei Formen.
+ */
 function nestedName(v: unknown): string | null {
+  if (v == null) return null;
   if (typeof v === "string") return v.trim() ? v : null;
-  const attrs = (v as Json | null)?.attributes as Json | undefined;
-  const name = (attrs?.name as Json | undefined)?.value;
-  return asString(name);
+  const obj = v as Json;
+  const attrs = (obj.attributes as Json | undefined) ?? obj;
+  const name = attrs?.name;
+  if (typeof name === "string") return name.trim() ? name : null;
+  // Fallback, falls name selbst wieder {value} ist.
+  return asString((name as Json | undefined)?.value);
 }
 
 async function getToken(): Promise<string> {
