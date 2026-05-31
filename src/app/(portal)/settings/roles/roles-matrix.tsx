@@ -16,6 +16,7 @@ const PERMISSION_LABELS: Record<string, string> = {
   "customers.manage": "Kunden verwalten",
   "notes.create": "Notizen erstellen",
   "tags.manage": "Tags verwalten",
+  "tickets.tag": "Tags am Ticket anwenden",
   "templates.read": "Vorlagen lesen",
   "templates.manage": "Vorlagen verwalten",
   "audit.read": "Audit-Log lesen",
@@ -24,6 +25,8 @@ const PERMISSION_LABELS: Record<string, string> = {
   "roles.manage": "Rollen & Rechte verwalten",
   "locations.manage": "Standorte verwalten",
   "mailboxes.manage": "Postfächer verwalten",
+  "mailboxes.send_as": "Aus anderem Postfach senden",
+  "signatures.manage": "Signaturen anderer verwalten",
 };
 
 export function RolesMatrixEditor({ matrix }: { matrix: RolesMatrix }) {

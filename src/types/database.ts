@@ -601,6 +601,13 @@ export type Database = {
           preview: string | null;
         }[];
       };
+      set_user_signature: {
+        Args: {
+          p_profile_id: string;
+          p_html: string;
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
       ticket_status: TicketStatus;

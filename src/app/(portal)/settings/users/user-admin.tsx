@@ -23,6 +23,7 @@ interface Props {
   roles: RoleOption[];
   locations: LocationOption[];
   canManage: boolean;
+  canManageSignatures: boolean;
 }
 
 function Feedback({ result }: { result: ActionResult | null }) {
@@ -36,7 +37,7 @@ function Feedback({ result }: { result: ActionResult | null }) {
   );
 }
 
-export function UserAdmin({ users, roles, locations, canManage }: Props) {
+export function UserAdmin({ users, roles, locations, canManage, canManageSignatures }: Props) {
   const [showCreate, setShowCreate] = useState(false);
 
   return (
@@ -72,6 +73,7 @@ export function UserAdmin({ users, roles, locations, canManage }: Props) {
               roles={roles}
               locations={locations}
               canManage={canManage}
+              canManageSignatures={canManageSignatures}
             />
           ))}
           {users.length === 0 && (
@@ -183,11 +185,13 @@ function UserRow({
   roles,
   locations,
   canManage,
+  canManageSignatures,
 }: {
   user: ManagedUser;
   roles: RoleOption[];
   locations: LocationOption[];
   canManage: boolean;
+  canManageSignatures: boolean;
 }) {
   const [assignResult, assignAction, assignPending] = useActionState(assignRole, null);
   const [activeResult, activeAction] = useActionState(setActive, null);
@@ -238,20 +242,26 @@ function UserRow({
           </div>
         </div>
 
-        {canManage && (
+        {(canManage || canManageSignatures) && (
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setOpen((o) => !o)}
-              className="flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--background)]"
-            >
-              <Plus className="h-3.5 w-3.5" /> Rolle
-            </button>
-            <button
-              onClick={() => setShowSig((s) => !s)}
-              className="flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--background)]"
-            >
-              <PenLine className="h-3.5 w-3.5" /> Signatur
-            </button>
+            {canManage && (
+              <button
+                onClick={() => setOpen((o) => !o)}
+                className="flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--background)]"
+              >
+                <Plus className="h-3.5 w-3.5" /> Rolle
+              </button>
+            )}
+            {canManageSignatures && (
+              <button
+                onClick={() => setShowSig((s) => !s)}
+                className="flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--background)]"
+              >
+                <PenLine className="h-3.5 w-3.5" /> Signatur
+              </button>
+            )}
+            {canManage && (
+            <>
             <form action={activeAction}>
               <input type="hidden" name="profileId" value={user.profileId} />
               <input type="hidden" name="active" value={(!user.isActive).toString()} />
@@ -285,6 +295,8 @@ function UserRow({
                 {mfaPending ? "Reset…" : "2FA reset"}
               </button>
             </form>
+            </>
+            )}
           </div>
         )}
       </div>
@@ -334,7 +346,7 @@ function UserRow({
         </form>
       )}
 
-      {canManage && showSig && (
+      {canManageSignatures && showSig && (
         <AdminSignatureEditor
           profileId={user.profileId}
           initialValue={user.signatureHtml ?? ""}

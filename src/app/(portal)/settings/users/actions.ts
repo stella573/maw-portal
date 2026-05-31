@@ -313,7 +313,10 @@ export async function updateUserSignature(
   formData: FormData,
 ): Promise<ActionResult> {
   try {
-    await guard();
+    const ctx = await getCurrentUser();
+    if (!ctx || !can(ctx, "signatures.manage")) {
+      return { ok: false, message: "Keine Berechtigung." };
+    }
     const parsed = signatureSchema.safeParse({
       profileId: formData.get("profileId"),
       signatureHtml: formData.get("signatureHtml") ?? "",
@@ -323,15 +326,17 @@ export async function updateUserSignature(
     }
     const value = parsed.data.signatureHtml.trim();
 
+    // Schreibt ausschließlich die signature_html-Spalte und prüft das Recht
+    // signatures.manage serverseitig (SECURITY DEFINER, Migration 0015).
     const supabase = await createClient();
-    const { error } = await supabase
-      .from("profiles")
-      .update({ signature_html: value ? value : null })
-      .eq("id", parsed.data.profileId);
+    const { error } = await supabase.rpc("set_user_signature", {
+      p_profile_id: parsed.data.profileId,
+      p_html: value,
+    });
     if (error) {
       return {
         ok: false,
-        message: /policy|permission|row-level/i.test(error.message)
+        message: /privilege|permission|denied/i.test(error.message)
           ? "Keine Berechtigung."
           : error.message,
       };
@@ -347,9 +352,6 @@ export async function updateUserSignature(
     revalidatePath("/settings/users");
     return { ok: true, message: value ? "Signatur gespeichert." : "Signatur entfernt." };
   } catch (err) {
-    if (err instanceof Error && err.message === "FORBIDDEN") {
-      return { ok: false, message: "Keine Berechtigung." };
-    }
     console.error("[users.updateUserSignature]", err);
     return { ok: false, message: "Unerwarteter Fehler." };
   }

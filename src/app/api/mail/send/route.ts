@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
   const { data: ticket, error: ticketErr } = await supabase
     .from("tickets")
     .select(
-      "id, reference, subject, location_id, customers(email), mailboxes(name, email)",
+      "id, reference, subject, location_id, mailbox_id, customers(email), mailboxes(name, email)",
     )
     .eq("id", input.ticketId)
     .single();
@@ -79,9 +79,17 @@ export async function POST(request: NextRequest) {
     email: string;
   } | null;
 
-  // Optional: aus einem anderen (eigenen) Postfach senden. RLS stellt sicher,
-  // dass der User nur Postfächer wählen kann, die er sehen/bedienen darf.
-  if (input.mailboxId) {
+  // Optional: aus einem anderen (eigenen) Postfach senden. Ein vom Ticket-
+  // Postfach ABWEICHENDES Absenderpostfach erfordert das Recht
+  // mailboxes.send_as. RLS stellt zusätzlich sicher, dass nur sichtbare
+  // Postfächer wählbar sind.
+  if (input.mailboxId && input.mailboxId !== ticket.mailbox_id) {
+    if (!can(user, "mailboxes.send_as")) {
+      return NextResponse.json(
+        { error: "Keine Berechtigung, aus einem anderen Postfach zu senden" },
+        { status: 403 },
+      );
+    }
     const { data: chosen } = await supabase
       .from("mailboxes")
       .select("name, email, is_active")

@@ -28,12 +28,14 @@ export function TicketView({
   currentUser,
   templates,
   mailboxes,
+  canTag,
 }: {
   ticket: TicketDetail;
   showDiagnostics?: boolean;
   currentUser: { profileId: string; name: string } | null;
   templates: ReplyTemplate[];
   mailboxes: { id: string; name: string }[];
+  canTag: boolean;
 }) {
   // Live: Status-/Zuweisungs-Änderungen und neue Nachrichten sofort spiegeln.
   useRealtimeRefresh([
@@ -57,9 +59,6 @@ export function TicketView({
       >
         <ArrowLeft className="h-4 w-4" /> Zurück zur Inbox
       </Link>
-
-      {/* Hinweis: weitere Bearbeiter im selben Ticket (Doppelbearbeitung vermeiden) */}
-      {here.length > 0 && <PresenceBanner peers={here} />}
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Hauptspalte: Verlauf */}
@@ -121,6 +120,10 @@ export function TicketView({
             ))}
           </div>
 
+          {/* Hinweis direkt über dem Antwortbereich: wer ist sonst noch im
+              Ticket bzw. tippt gerade? (Doppelbearbeitung vermeiden) */}
+          {here.length > 0 && <PresenceBanner peers={here} />}
+
           {/* Antwort-Editor: Versand über Resend + KI-Vorschläge */}
           <ReplyEditor
             ticketId={ticket.id}
@@ -135,7 +138,7 @@ export function TicketView({
         {/* Seitenspalte: Steuerung + Kunde + Notizen */}
         <div className="space-y-4">
           <TicketControls ticket={ticket} />
-          <TagsCard ticket={ticket} />
+          <TagsCard ticket={ticket} canTag={canTag} />
           <CustomerCard ticket={ticket} />
           <NotesCard ticket={ticket} />
         </div>
@@ -328,7 +331,7 @@ function AssignControl({ ticket }: { ticket: TicketDetail }) {
   );
 }
 
-function TagsCard({ ticket }: { ticket: TicketDetail }) {
+function TagsCard({ ticket, canTag }: { ticket: TicketDetail; canTag: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const usedIds = new Set(ticket.tags.map((t) => t.id));
@@ -371,20 +374,22 @@ function TagsCard({ ticket }: { ticket: TicketDetail }) {
               style={{ backgroundColor: t.color }}
             />
             {t.name}
-            <button
-              type="button"
-              onClick={() => remove(t.id)}
-              disabled={pending}
-              aria-label={`Tag ${t.name} entfernen`}
-              className="opacity-70 transition hover:opacity-100"
-            >
-              <X className="h-3 w-3" />
-            </button>
+            {canTag && (
+              <button
+                type="button"
+                onClick={() => remove(t.id)}
+                disabled={pending}
+                aria-label={`Tag ${t.name} entfernen`}
+                className="opacity-70 transition hover:opacity-100"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
           </span>
         ))}
       </div>
 
-      {available.length > 0 ? (
+      {canTag && available.length > 0 && (
         <div className="mt-3 flex items-center gap-1.5">
           <Plus className="h-3.5 w-3.5 text-[var(--muted)]" />
           <select
@@ -401,12 +406,11 @@ function TagsCard({ ticket }: { ticket: TicketDetail }) {
             ))}
           </select>
         </div>
-      ) : (
-        ticket.allTags.length === 0 && (
-          <p className="mt-3 text-xs text-[var(--muted)]">
-            Noch keine Tags angelegt – unter Einstellungen → Tags.
-          </p>
-        )
+      )}
+      {canTag && ticket.allTags.length === 0 && (
+        <p className="mt-3 text-xs text-[var(--muted)]">
+          Noch keine Tags angelegt – unter Einstellungen → Tags.
+        </p>
       )}
     </div>
   );
