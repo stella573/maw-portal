@@ -3,6 +3,7 @@ import {
   Users,
   Mailbox,
   ShieldCheck,
+  PenLine,
   type LucideIcon,
 } from "lucide-react";
 import type { Permission } from "@/lib/auth/roles";
@@ -27,6 +28,13 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     href: "/settings",
     icon: User,
     description: "Eigene Daten, 2FA-Status",
+  },
+  {
+    key: "signature",
+    label: "E-Mail-Signatur",
+    href: "/settings/signature",
+    icon: PenLine,
+    description: "Persönliche Signatur für ausgehende Mails",
   },
   {
     key: "users",

@@ -16,13 +16,20 @@ function escapeHtml(s: string): string {
 /**
  * Baut die vollständige HTML-Mail aus reinem Antworttext.
  * @param bodyText reiner Text (wird escaped, Umbrüche bleiben erhalten)
+ * @param signatureHtml optionale HTML-Signatur der/des Mitarbeitenden; wird
+ *   unter den Nachrichtentext gesetzt. Bewusst NICHT escaped (vom internen
+ *   Mitarbeitenden gepflegtes, vertrauenswürdiges HTML).
  */
-export function renderEmailHtml(bodyText: string): string {
-  const content = `<div style="white-space:pre-wrap; color:#E5E7EB; font-size:14px; line-height:24px;">${escapeHtml(
+export function renderEmailHtml(bodyText: string, signatureHtml?: string | null): string {
+  const body = `<div style="white-space:pre-wrap; color:#E5E7EB; font-size:14px; line-height:24px;">${escapeHtml(
     bodyText,
   )}</div>`;
+  const signature =
+    signatureHtml && signatureHtml.trim()
+      ? `<div style="margin-top:8px; color:#E5E7EB; font-size:14px; line-height:24px;">${signatureHtml}</div>`
+      : "";
   const year = new Date().getFullYear();
-  return baseTemplate(content, year);
+  return baseTemplate(body + signature, year);
 }
 
 function baseTemplate(content: string, year: number): string {

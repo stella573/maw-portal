@@ -96,11 +96,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Persönliche Signatur der/des Absendenden (für den Mailversand).
+  const { data: senderProfile } = await supabase
+    .from("profiles")
+    .select("signature_html")
+    .eq("id", user.profileId)
+    .maybeSingle();
+  const signatureHtml = senderProfile?.signature_html ?? null;
+
   const subject = subjectWithReference(ticket.subject, ticket.reference);
   // Schlichtes HTML für die In-App-Ansicht (Verlauf), volles MAW-Template für
-  // den tatsächlichen Mailversand.
+  // den tatsächlichen Mailversand. Die Signatur wird unter den Text gesetzt.
   const bodyHtml = `<div style="white-space:pre-wrap">${escapeHtml(input.bodyText)}</div>`;
-  const emailHtml = renderEmailHtml(input.bodyText);
+  const emailHtml = renderEmailHtml(input.bodyText, signatureHtml);
 
   // Vorab hochgeladene Anhänge laden (nur solche dieses Tickets, noch ohne
   // message_id). Inhalt aus Storage holen, um ihn an die Mail zu hängen.
