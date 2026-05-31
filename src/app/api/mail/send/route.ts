@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/services/auth/current-user";
 import { can } from "@/lib/auth/permissions";
 import { getResend, getFromEmail } from "@/lib/resend/client";
@@ -115,14 +116,21 @@ export async function POST(request: NextRequest) {
   const attachmentRows: { id: string; storage_path: string; file_name: string }[] = [];
   const resendAttachments: { filename: string; content: Buffer }[] = [];
   if (input.attachmentIds && input.attachmentIds.length > 0) {
+    // Auswahl/Berechtigung über den RLS-Client (nur Anhänge dieses Tickets,
+    // die der User sehen darf, noch ohne message_id).
     const { data: atts } = await supabase
       .from("attachments")
       .select("id, storage_path, file_name")
       .in("id", input.attachmentIds)
       .eq("ticket_id", ticket.id)
       .is("message_id", null);
+    // Download über Service-Role: der Bucket ist privat und hat bewusst KEINE
+    // storage-Policy für authenticated (s. Migration 0009). Der User-Client
+    // dürfte daher nicht lesen → Anhänge würden sonst still verworfen und die
+    // Mail ginge OHNE Anhang raus. Berechtigung ist oben bereits geprüft.
+    const admin = createAdminClient();
     for (const a of atts ?? []) {
-      const { data: blob, error: dlErr } = await supabase.storage
+      const { data: blob, error: dlErr } = await admin.storage
         .from("mail-attachments")
         .download(a.storage_path);
       if (dlErr || !blob) {
