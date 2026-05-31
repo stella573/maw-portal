@@ -152,18 +152,38 @@ export async function POST(request: NextRequest) {
 
   const supabase = createAdminClient();
 
-  // 0) Postfach über Empfänger-Adresse bestimmen.
+  // 0) Postfach über Empfänger-Adresse bestimmen – primäre Adresse ODER Alias.
   let mailboxId: string | null = null;
   let mailboxLocationId: string | null = null;
   if (toEmail) {
+    // a) primäre Postfach-Adresse
     const { data: mailbox } = await supabase
       .from("mailboxes")
       .select("id, location_id, is_active")
       .eq("email", toEmail)
       .maybeSingle();
-    if (mailbox && mailbox.is_active) {
-      mailboxId = mailbox.id;
-      mailboxLocationId = mailbox.location_id;
+    let resolved = mailbox;
+
+    // b) sonst Alias → zugehöriges Postfach laden
+    if (!resolved) {
+      const { data: alias } = await supabase
+        .from("mailbox_aliases")
+        .select("mailbox_id")
+        .eq("email", toEmail)
+        .maybeSingle();
+      if (alias) {
+        const { data: aliasBox } = await supabase
+          .from("mailboxes")
+          .select("id, location_id, is_active")
+          .eq("id", alias.mailbox_id)
+          .maybeSingle();
+        resolved = aliasBox ?? null;
+      }
+    }
+
+    if (resolved && resolved.is_active) {
+      mailboxId = resolved.id;
+      mailboxLocationId = resolved.location_id;
     }
   }
   // Kein passendes (aktives) Postfach → bewusst 202 (akzeptiert, ignoriert),

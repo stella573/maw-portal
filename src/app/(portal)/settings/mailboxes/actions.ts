@@ -170,6 +170,104 @@ export async function addMember(
 }
 
 // ----------------------------------------------------------------------------
+// Alias hinzufügen (weitere Empfangsadresse → selbes Postfach)
+// ----------------------------------------------------------------------------
+const aliasSchema = z.object({
+  mailboxId: z.string().uuid(),
+  email: z.string().email("Ungültige E-Mail-Adresse."),
+});
+
+export async function addAlias(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    await guard();
+    const parsed = aliasSchema.safeParse({
+      mailboxId: formData.get("mailboxId"),
+      email: formData.get("email"),
+    });
+    if (!parsed.success) {
+      return { ok: false, message: parsed.error.issues[0]?.message ?? "Ungültige Eingabe." };
+    }
+    const { mailboxId, email } = parsed.data;
+
+    const supabase = await createClient();
+
+    // Adresse darf nicht bereits eine primäre Postfach-Adresse sein.
+    const { data: primary } = await supabase
+      .from("mailboxes")
+      .select("id")
+      .eq("email", email)
+      .maybeSingle();
+    if (primary) {
+      return { ok: false, message: "Diese Adresse ist bereits eine Postfach-Adresse." };
+    }
+
+    const { error } = await supabase
+      .from("mailbox_aliases")
+      .insert({ mailbox_id: mailboxId, email });
+    if (error) {
+      return {
+        ok: false,
+        message: /duplicate|unique/i.test(error.message)
+          ? "Diese Alias-Adresse wird bereits verwendet."
+          : /policy|permission|row-level/i.test(error.message)
+            ? "Keine Berechtigung."
+            : error.message,
+      };
+    }
+
+    await logAudit({
+      action: "mailbox.updated",
+      entityType: "mailbox",
+      entityId: mailboxId,
+      metadata: { alias_added: email },
+    });
+
+    revalidatePath("/settings/mailboxes");
+    return { ok: true, message: `Alias „${email}“ hinzugefügt.` };
+  } catch (err) {
+    return forbidden(err) ?? { ok: false, message: "Unerwarteter Fehler." };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// Alias entfernen
+// ----------------------------------------------------------------------------
+export async function removeAlias(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    await guard();
+    const id = z.string().uuid().safeParse(formData.get("aliasId"));
+    if (!id.success) return { ok: false, message: "Ungültige Eingabe." };
+
+    const supabase = await createClient();
+    const { data: removed, error } = await supabase
+      .from("mailbox_aliases")
+      .delete()
+      .eq("id", id.data)
+      .select("mailbox_id, email")
+      .maybeSingle();
+    if (error) return { ok: false, message: error.message };
+
+    await logAudit({
+      action: "mailbox.updated",
+      entityType: "mailbox",
+      entityId: removed?.mailbox_id ?? null,
+      metadata: { alias_removed: removed?.email ?? null },
+    });
+
+    revalidatePath("/settings/mailboxes");
+    return { ok: true, message: "Alias entfernt." };
+  } catch (err) {
+    return forbidden(err) ?? { ok: false, message: "Unerwarteter Fehler." };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // Mitglied entfernen
 // ----------------------------------------------------------------------------
 export async function removeMember(

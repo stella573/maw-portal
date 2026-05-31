@@ -15,6 +15,11 @@ export interface MailboxMember {
   fullName: string | null;
 }
 
+export interface MailboxAlias {
+  id: string;
+  email: string;
+}
+
 export interface ManagedMailbox {
   id: string;
   name: string;
@@ -23,6 +28,7 @@ export interface ManagedMailbox {
   locationName: string | null;
   isActive: boolean;
   members: MailboxMember[];
+  aliases: MailboxAlias[];
   ticketCount: number;
 }
 
@@ -55,6 +61,11 @@ export async function listMailboxes(): Promise<ManagedMailbox[]> {
     .from("mailbox_members")
     .select("mailbox_id, profiles(id, email, full_name)");
 
+  const { data: aliases } = await supabase
+    .from("mailbox_aliases")
+    .select("id, mailbox_id, email")
+    .order("email");
+
   // Ticketanzahl je Postfach (head + count pro Box).
   const counts = new Map<string, number>();
   await Promise.all(
@@ -85,6 +96,10 @@ export async function listMailboxes(): Promise<ManagedMailbox[]> {
       })
       .filter((m) => m.profileId !== "");
 
+    const mbAliases: MailboxAlias[] = (aliases ?? [])
+      .filter((a) => a.mailbox_id === b.id)
+      .map((a) => ({ id: a.id, email: a.email }));
+
     return {
       id: b.id,
       name: b.name,
@@ -93,6 +108,7 @@ export async function listMailboxes(): Promise<ManagedMailbox[]> {
       locationName: loc?.name ?? null,
       isActive: b.is_active,
       members: mbMembers,
+      aliases: mbAliases,
       ticketCount: counts.get(b.id) ?? 0,
     };
   });

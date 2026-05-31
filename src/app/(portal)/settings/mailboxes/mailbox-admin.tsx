@@ -1,12 +1,14 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Inbox, Plus, Trash2, UserPlus, Mail } from "lucide-react";
+import { Inbox, Plus, Trash2, UserPlus, Mail, AtSign } from "lucide-react";
 import {
   createMailbox,
   setMailboxActive,
   addMember,
   removeMember,
+  addAlias,
+  removeAlias,
   type ActionResult,
 } from "./actions";
 import type {
@@ -129,7 +131,9 @@ function MailboxCard({
 }) {
   const [addResult, addAction, addPending] = useActionState(addMember, null);
   const [activeResult, activeAction] = useActionState(setMailboxActive, null);
+  const [aliasResult, aliasAction, aliasPending] = useActionState(addAlias, null);
   const [showAdd, setShowAdd] = useState(false);
+  const [showAlias, setShowAlias] = useState(false);
 
   // Nur Profile anbieten, die noch nicht Mitglied sind.
   const memberIds = new Set(mailbox.members.map((m) => m.profileId));
@@ -160,6 +164,12 @@ function MailboxCard({
 
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowAlias((s) => !s)}
+            className="flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--background)]"
+          >
+            <AtSign className="h-3.5 w-3.5" /> Alias
+          </button>
+          <button
             onClick={() => setShowAdd((s) => !s)}
             className="flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--background)]"
           >
@@ -177,6 +187,60 @@ function MailboxCard({
           </form>
         </div>
       </div>
+
+      {/* Alias-Adressen */}
+      {(mailbox.aliases.length > 0 || showAlias) && (
+        <div className="mt-3">
+          <div className="text-xs font-medium text-[var(--muted)]">
+            Alias-Adressen (landen im selben Postfach)
+          </div>
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {mailbox.aliases.length === 0 && (
+              <span className="text-xs text-[var(--muted)]">
+                Noch keine Aliase.
+              </span>
+            )}
+            {mailbox.aliases.map((a) => (
+              <span
+                key={a.id}
+                className="inline-flex items-center gap-1 rounded-full bg-[var(--background)] px-2 py-0.5 text-xs"
+              >
+                <AtSign className="h-3 w-3 text-[var(--muted)]" />
+                {a.email}
+                <RemoveAliasButton aliasId={a.id} />
+              </span>
+            ))}
+          </div>
+          {showAlias && (
+            <form
+              action={aliasAction}
+              className="mt-2 flex flex-wrap items-end gap-2 rounded-lg bg-[var(--background)] p-3"
+            >
+              <input type="hidden" name="mailboxId" value={mailbox.id} />
+              <div className="min-w-[14rem] flex-1">
+                <label className="block text-xs text-[var(--muted)]">
+                  Alias-E-Mail
+                </label>
+                <input
+                  name="email"
+                  type="email"
+                  required
+                  placeholder="info@miningadventureworld.de"
+                  className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-sm outline-none focus:border-brand-500"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={aliasPending}
+                className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
+              >
+                Hinzufügen
+              </button>
+              <Feedback result={aliasResult} />
+            </form>
+          )}
+        </div>
+      )}
 
       {/* Mitgliederliste */}
       <div className="mt-3 flex flex-wrap gap-1.5">
@@ -250,6 +314,24 @@ function RemoveMemberButton({
         disabled={pending}
         aria-label="Mitglied entfernen"
         title="Mitglied entfernen"
+        className="text-[var(--muted)] transition hover:text-red-500"
+      >
+        <Trash2 className="h-3 w-3" />
+      </button>
+    </form>
+  );
+}
+
+function RemoveAliasButton({ aliasId }: { aliasId: string }) {
+  const [, action, pending] = useActionState(removeAlias, null);
+  return (
+    <form action={action} className="inline">
+      <input type="hidden" name="aliasId" value={aliasId} />
+      <button
+        type="submit"
+        disabled={pending}
+        aria-label="Alias entfernen"
+        title="Alias entfernen"
         className="text-[var(--muted)] transition hover:text-red-500"
       >
         <Trash2 className="h-3 w-3" />

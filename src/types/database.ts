@@ -93,6 +93,7 @@ export type Database = {
           email: string;
           full_name: string | null;
           avatar_url: string | null;
+          signature_html: string | null;
           is_active: boolean;
           created_at: string;
           updated_at: string;
@@ -102,6 +103,7 @@ export type Database = {
           email: string;
           full_name?: string | null;
           avatar_url?: string | null;
+          signature_html?: string | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -111,6 +113,7 @@ export type Database = {
           email?: string;
           full_name?: string | null;
           avatar_url?: string | null;
+          signature_html?: string | null;
           is_active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -350,6 +353,27 @@ export type Database = {
         Update: {
           mailbox_id?: string;
           profile_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      mailbox_aliases: {
+        Row: {
+          id: string;
+          mailbox_id: string;
+          email: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          mailbox_id: string;
+          email: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          mailbox_id?: string;
+          email?: string;
           created_at?: string;
         };
         Relationships: [];
