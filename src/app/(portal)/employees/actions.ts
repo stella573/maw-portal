@@ -8,6 +8,10 @@ import { getCurrentUser } from "@/services/auth/current-user";
 import { can, isOwnerOrAdmin } from "@/lib/auth/permissions";
 import { logAudit } from "@/lib/audit/log";
 import { syncFromPersonio } from "@/services/admin/personio";
+import { getResend, getFromEmail } from "@/lib/resend/client";
+import { renderWelcomeEmail } from "@/lib/resend/email-template";
+import { EMAIL_SENDER_BRAND } from "@/config/app";
+import { publicEnv } from "@/lib/env";
 
 export interface ActionResult {
   ok: boolean;
@@ -142,15 +146,46 @@ export async function createPortalAccess(
       .update({ profile_id: newUserId })
       .eq("personio_id", input.personioId);
 
+    // Willkommens-Mail (MAW-Design) mit Zugangsdaten – best effort: ein
+    // Fehler beim Versand bricht die Konto-Erstellung nicht ab.
+    let mailSent = false;
+    try {
+      const loginUrl = `${publicEnv.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "")}/login`;
+      const html = renderWelcomeEmail({
+        name: fullName,
+        email: emp.email,
+        password: input.password,
+        loginUrl,
+      });
+      await getResend().emails.send({
+        from: `${EMAIL_SENDER_BRAND} <${getFromEmail()}>`,
+        to: emp.email,
+        subject: "Dein Zugang zum MAW Mitarbeiter-HUB",
+        html,
+        text:
+          `Hallo ${fullName},\n\nfür dich wurde ein Zugang zum MAW Mitarbeiter-HUB erstellt.\n` +
+          `Kennung: ${emp.email}\nInitialpasswort: ${input.password}\n\nAnmelden: ${loginUrl}\n\n` +
+          `Bitte ändere dein Passwort bei der ersten Anmeldung und richte 2FA ein.`,
+      });
+      mailSent = true;
+    } catch (mailErr) {
+      console.error("[employees.createPortalAccess] Willkommens-Mail:", mailErr);
+    }
+
     await logAudit({
       action: "user.created",
       entityType: "profile",
       entityId: newUserId,
-      metadata: { from_personio: input.personioId, email: emp.email, role: role.key },
+      metadata: { from_personio: input.personioId, email: emp.email, role: role.key, welcome_mail: mailSent },
     });
 
     revalidatePath("/employees");
-    return { ok: true, message: `Zugang für ${emp.email} angelegt.` };
+    return {
+      ok: true,
+      message: mailSent
+        ? `Zugang für ${emp.email} angelegt – Willkommens-Mail verschickt.`
+        : `Zugang für ${emp.email} angelegt. Hinweis: Willkommens-Mail konnte nicht versendet werden (Zugangsdaten bitte manuell mitteilen).`,
+    };
   } catch (err) {
     console.error("[employees.createPortalAccess]", err);
     return { ok: false, message: "Unerwarteter Fehler." };
