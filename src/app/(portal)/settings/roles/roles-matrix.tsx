@@ -28,7 +28,7 @@ const PERMISSION_LABELS: Record<string, string> = {
   "mailboxes.send_as": "Aus anderem Postfach senden",
   "signatures.manage": "Signaturen anderer verwalten",
   "employees.read": "Mitarbeiter-Verzeichnis ansehen",
-  "employees.manage": "Mitarbeiter synchronisieren & Zugänge anlegen",
+  "employees.manage": "Mitarbeiter aus Personio synchronisieren",
 };
 
 export function RolesMatrixEditor({ matrix }: { matrix: RolesMatrix }) {

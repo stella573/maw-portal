@@ -50,17 +50,32 @@ export interface TicketFilters {
 }
 
 /**
- * Postfächer, die der eingeloggte User sehen darf, inkl. Anzahl offener
- * Tickets. RLS sorgt dafür, dass nur erlaubte Postfächer zurückkommen.
+ * Postfächer für die Inbox. NUR der Owner sieht alle Postfächer; alle anderen
+ * (inkl. Admin) sehen ausschließlich ihre zugewiesenen (Postfach-Mitgliedschaft).
  */
 export async function getInboxMailboxes(): Promise<InboxMailbox[]> {
   const supabase = await createClient();
+  const ctx = await getCurrentUser();
+  if (!ctx) return [];
+  const isOwner = ctx.assignments.some((a) => a.roleKey === "owner");
 
-  const { data: boxes } = await supabase
+  let boxesQuery = supabase
     .from("mailboxes")
     .select("id, name, email")
     .eq("is_active", true)
     .order("name");
+
+  if (!isOwner) {
+    const { data: memberships } = await supabase
+      .from("mailbox_members")
+      .select("mailbox_id")
+      .eq("profile_id", ctx.profileId);
+    const ids = (memberships ?? []).map((m) => m.mailbox_id);
+    if (ids.length === 0) return [];
+    boxesQuery = boxesQuery.in("id", ids);
+  }
+
+  const { data: boxes } = await boxesQuery;
 
   if (!boxes || boxes.length === 0) return [];
 
