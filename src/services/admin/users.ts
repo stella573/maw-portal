@@ -30,6 +30,7 @@ export interface ManagedUser {
   createdAt: string;
   roles: ManagedRole[];
   mfaEnabled: boolean;
+  signatureHtml: string | null;
 }
 
 export interface RoleOption {
@@ -63,7 +64,7 @@ export async function listUsers(): Promise<ManagedUser[]> {
 
   const { data: profiles, error } = await supabase
     .from("profiles")
-    .select("id, email, full_name, is_active, created_at")
+    .select("id, email, full_name, is_active, created_at, signature_html")
     .order("created_at", { ascending: true });
 
   if (error) throw new Error(error.message);
@@ -113,6 +114,7 @@ export async function listUsers(): Promise<ManagedUser[]> {
       createdAt: p.created_at,
       roles,
       mfaEnabled: mfaByUser.get(p.id) ?? false,
+      signatureHtml: p.signature_html ?? null,
     };
   });
 }

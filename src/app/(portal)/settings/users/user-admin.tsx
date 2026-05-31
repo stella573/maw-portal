@@ -1,13 +1,14 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { UserPlus, ShieldCheck, ShieldAlert, Trash2, Plus, KeyRound } from "lucide-react";
+import { UserPlus, ShieldCheck, ShieldAlert, Trash2, Plus, KeyRound, PenLine } from "lucide-react";
 import {
   createEmployee,
   assignRole,
   revokeRole,
   setActive,
   resetMfa,
+  updateUserSignature,
   type ActionResult,
 } from "./actions";
 import type {
@@ -15,6 +16,7 @@ import type {
   RoleOption,
   LocationOption,
 } from "@/services/admin/users";
+import { buildDefaultSignature } from "../signature/default-signature";
 
 interface Props {
   users: ManagedUser[];
@@ -191,6 +193,7 @@ function UserRow({
   const [activeResult, activeAction] = useActionState(setActive, null);
   const [mfaResult, mfaAction, mfaPending] = useActionState(resetMfa, null);
   const [open, setOpen] = useState(false);
+  const [showSig, setShowSig] = useState(false);
 
   return (
     <li className="px-5 py-4">
@@ -242,6 +245,12 @@ function UserRow({
               className="flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--background)]"
             >
               <Plus className="h-3.5 w-3.5" /> Rolle
+            </button>
+            <button
+              onClick={() => setShowSig((s) => !s)}
+              className="flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--background)]"
+            >
+              <PenLine className="h-3.5 w-3.5" /> Signatur
             </button>
             <form action={activeAction}>
               <input type="hidden" name="profileId" value={user.profileId} />
@@ -325,9 +334,92 @@ function UserRow({
         </form>
       )}
 
+      {canManage && showSig && (
+        <AdminSignatureEditor
+          profileId={user.profileId}
+          initialValue={user.signatureHtml ?? ""}
+          defaultTemplate={buildDefaultSignature({
+            name: user.fullName ?? user.email,
+            email: user.email,
+          })}
+        />
+      )}
+
       <Feedback result={activeResult} />
       <Feedback result={mfaResult} />
     </li>
+  );
+}
+
+/** Inline-Editor für die HTML-Signatur eines Mitarbeiters (Admin). */
+function AdminSignatureEditor({
+  profileId,
+  initialValue,
+  defaultTemplate,
+}: {
+  profileId: string;
+  initialValue: string;
+  defaultTemplate: string;
+}) {
+  const [value, setValue] = useState(initialValue);
+  const [result, action, pending] = useActionState(updateUserSignature, null);
+
+  const srcDoc = `<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><base target="_blank">
+<style>html,body{margin:0;padding:24px;background:#111827;color:#E5E7EB;
+font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:24px;word-break:break-word;}
+img{max-width:100%;height:auto;}a{color:#E8920B;}</style>
+</head><body>${value}</body></html>`;
+
+  return (
+    <form
+      action={action}
+      className="mt-3 grid gap-3 rounded-lg bg-[var(--background)] p-3 lg:grid-cols-2"
+    >
+      <input type="hidden" name="profileId" value={profileId} />
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-[var(--muted)]">
+            Signatur (HTML)
+          </label>
+          <button
+            type="button"
+            onClick={() => setValue(defaultTemplate)}
+            className="rounded-lg border border-[var(--border)] px-2 py-1 text-[11px] transition hover:bg-[var(--surface)]"
+          >
+            Vorlage einfügen
+          </button>
+        </div>
+        <textarea
+          name="signatureHtml"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          rows={14}
+          spellCheck={false}
+          placeholder="Mit freundlichen Grüßen …"
+          className="w-full resize-y rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 font-mono text-xs outline-none focus:border-brand-500"
+        />
+        <div className="flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
+          >
+            {pending ? "Speichere…" : "Signatur speichern"}
+          </button>
+          <Feedback result={result} />
+        </div>
+      </div>
+      <div className="space-y-1">
+        <span className="text-xs font-medium text-[var(--muted)]">Vorschau</span>
+        <iframe
+          sandbox="allow-popups"
+          srcDoc={srcDoc}
+          title="Signatur-Vorschau"
+          className="h-[360px] w-full rounded-lg border border-[var(--border)]"
+        />
+      </div>
+    </form>
   );
 }
 

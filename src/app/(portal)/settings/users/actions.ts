@@ -299,6 +299,63 @@ export async function setActive(
 }
 
 // ----------------------------------------------------------------------------
+// E-Mail-Signatur eines Mitarbeiters setzen (Owner/Admin)
+//   Schreibt profiles.signature_html über den RLS-Client (Policy
+//   profiles_update_admin greift bei users.manage). Leeres Feld = entfernen.
+// ----------------------------------------------------------------------------
+const signatureSchema = z.object({
+  profileId: z.string().uuid(),
+  signatureHtml: z.string().max(20000, "Signatur ist zu lang (max. 20.000 Zeichen)."),
+});
+
+export async function updateUserSignature(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    await guard();
+    const parsed = signatureSchema.safeParse({
+      profileId: formData.get("profileId"),
+      signatureHtml: formData.get("signatureHtml") ?? "",
+    });
+    if (!parsed.success) {
+      return { ok: false, message: parsed.error.issues[0]?.message ?? "Ungültige Eingabe." };
+    }
+    const value = parsed.data.signatureHtml.trim();
+
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ signature_html: value ? value : null })
+      .eq("id", parsed.data.profileId);
+    if (error) {
+      return {
+        ok: false,
+        message: /policy|permission|row-level/i.test(error.message)
+          ? "Keine Berechtigung."
+          : error.message,
+      };
+    }
+
+    await logAudit({
+      action: "user.updated",
+      entityType: "profile",
+      entityId: parsed.data.profileId,
+      metadata: { signature_changed: true },
+    });
+
+    revalidatePath("/settings/users");
+    return { ok: true, message: value ? "Signatur gespeichert." : "Signatur entfernt." };
+  } catch (err) {
+    if (err instanceof Error && err.message === "FORBIDDEN") {
+      return { ok: false, message: "Keine Berechtigung." };
+    }
+    console.error("[users.updateUserSignature]", err);
+    return { ok: false, message: "Unerwarteter Fehler." };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // 2FA eines Mitarbeiters zurücksetzen (Owner/Admin)
 //   Entfernt ALLE TOTP-Faktoren des Users via Admin-API. Beim nächsten Login
 //   wird er durch die Middleware erneut zur 2FA-Einrichtung geführt.
