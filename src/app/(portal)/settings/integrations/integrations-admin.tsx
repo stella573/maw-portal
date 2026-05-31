@@ -120,6 +120,21 @@ function RollerCard({ conn }: { conn: RollerConnectionStatus }) {
             placeholder={conn.configured ? "••••••••" : "ROLLER Client Secret"}
           />
         </div>
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-medium text-[var(--muted)]">
+            API Base-URL
+          </label>
+          <input
+            name="baseUrl"
+            defaultValue={conn.baseUrl}
+            className="mt-1 w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 font-mono text-xs outline-none focus:border-brand-500"
+            placeholder="https://api.play.roller.app"
+          />
+          <p className="mt-1 text-[11px] text-[var(--muted)]">
+            Standard: https://api.play.roller.app – nur ändern, wenn ROLLER eine
+            andere Umgebung/Region vorgibt.
+          </p>
+        </div>
         <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
           <button
             type="submit"

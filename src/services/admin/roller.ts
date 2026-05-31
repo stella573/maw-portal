@@ -14,6 +14,7 @@ export interface RollerConnectionStatus {
   locationName: string;
   configured: boolean;
   clientId: string | null;
+  baseUrl: string;
   isActive: boolean;
   venueName: string | null;
   lastVerifiedAt: string | null;
@@ -33,7 +34,7 @@ export async function listRollerConnections(): Promise<RollerConnectionStatus[]>
     admin.from("locations").select("id, name").eq("is_active", true).order("name"),
     admin
       .from("roller_connections")
-      .select("location_id, client_id, is_active, venue_name, last_verified_at"),
+      .select("location_id, client_id, base_url, is_active, venue_name, last_verified_at"),
   ]);
   const byLoc = new Map((conns ?? []).map((c) => [c.location_id, c]));
   return (locs ?? []).map((l) => {
@@ -43,6 +44,7 @@ export async function listRollerConnections(): Promise<RollerConnectionStatus[]>
       locationName: l.name,
       configured: !!c,
       clientId: c?.client_id ?? null,
+      baseUrl: c?.base_url ?? "https://api.play.roller.app",
       isActive: c?.is_active ?? false,
       venueName: c?.venue_name ?? null,
       lastVerifiedAt: c?.last_verified_at ?? null,

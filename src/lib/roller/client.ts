@@ -20,7 +20,10 @@ async function getToken(creds: RollerCreds): Promise<string> {
   const cached = tokenCache.get(creds.clientId);
   if (cached && cached.expiresAt > Date.now() + 30_000) return cached.token;
 
-  const res = await fetch(`${creds.baseUrl.replace(/\/+$/, "")}/token`, {
+  const tokenUrl = `${creds.baseUrl.replace(/\/+$/, "")}/token`;
+
+  // Versuch 1: JSON (ROLLER-Standard laut offizieller Collection).
+  let res = await fetch(tokenUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
@@ -30,7 +33,30 @@ async function getToken(creds: RollerCreds): Promise<string> {
     }),
     cache: "no-store",
   });
-  const raw = await res.text().catch(() => "");
+  let raw = await res.text().catch(() => "");
+
+  // Versuch 2 (Fallback): form-urlencoded, falls JSON abgelehnt wird.
+  if (!res.ok) {
+    const form = new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: creds.clientId,
+      client_secret: creds.clientSecret,
+    });
+    const res2 = await fetch(tokenUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: form.toString(),
+      cache: "no-store",
+    });
+    if (res2.ok) {
+      res = res2;
+      raw = await res2.text().catch(() => "");
+    }
+  }
+
   let data: Json | null = null;
   try {
     data = raw ? (JSON.parse(raw) as Json) : null;
