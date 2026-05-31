@@ -311,7 +311,7 @@ function MailboxCard({
       <div className="mt-3 flex flex-wrap gap-1.5">
         {mailbox.members.length === 0 && (
           <span className="text-xs text-[var(--muted)]">
-            Keine Mitglieder – nur Owner/Admin sehen dieses Postfach.
+            Keine Mitglieder – nur der Owner sieht dieses Postfach.
           </span>
         )}
         {mailbox.members.map((m) => (
