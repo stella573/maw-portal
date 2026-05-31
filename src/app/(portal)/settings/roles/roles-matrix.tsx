@@ -30,6 +30,7 @@ const PERMISSION_LABELS: Record<string, string> = {
   "employees.read": "Mitarbeiter-Verzeichnis ansehen",
   "employees.manage": "Mitarbeiter aus Personio synchronisieren",
   "integrations.manage": "Integrationen/API-Zugänge verwalten",
+  "analytics.read": "Analytics/Auswertungen ansehen",
 };
 
 export function RolesMatrixEditor({ matrix }: { matrix: RolesMatrix }) {
