@@ -6,11 +6,12 @@ import { APP_NAME_SHORT } from "@/config/app";
 interface TopbarProps {
   userEmail: string;
   userName: string | null;
+  avatarUrl?: string | null;
   onMenuOpen: () => void;
 }
 
 /** Obere Leiste mit Hamburger (Mobil), Theme-Toggle, User-Identität und Logout. */
-export function Topbar({ userEmail, userName, onMenuOpen }: TopbarProps) {
+export function Topbar({ userEmail, userName, avatarUrl, onMenuOpen }: TopbarProps) {
   return (
     <header className="flex h-16 items-center justify-between gap-2 border-b border-[var(--border)] bg-[var(--surface)] px-3 md:px-6">
       <div className="flex min-w-0 items-center gap-2">
@@ -29,9 +30,18 @@ export function Topbar({ userEmail, userName, onMenuOpen }: TopbarProps) {
             {userEmail}
           </div>
         </div>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-medium text-white">
-          {(userName ?? userEmail).charAt(0).toUpperCase()}
-        </div>
+        {avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={avatarUrl}
+            alt={userName ?? userEmail}
+            className="h-9 w-9 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-600 text-sm font-medium text-white">
+            {(userName ?? userEmail).charAt(0).toUpperCase()}
+          </div>
+        )}
         <form action="/auth/signout" method="post">
           <button
             type="submit"
