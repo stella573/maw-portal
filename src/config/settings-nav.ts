@@ -4,6 +4,8 @@ import {
   Mailbox,
   ShieldCheck,
   PenLine,
+  Tag,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 import type { Permission } from "@/lib/auth/roles";
@@ -51,6 +53,22 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     icon: Mailbox,
     permission: "mailboxes.manage",
     description: "Funktions-/Team-Postfächer & Zuweisungen",
+  },
+  {
+    key: "templates",
+    label: "Antwortvorlagen",
+    href: "/settings/templates",
+    icon: FileText,
+    permission: "templates.manage",
+    description: "Textbausteine für wiederkehrende Antworten",
+  },
+  {
+    key: "tags",
+    label: "Tags / Kategorien",
+    href: "/settings/tags",
+    icon: Tag,
+    permission: "tags.manage",
+    description: "Schlagworte zum Kategorisieren von Tickets",
   },
   {
     key: "roles",

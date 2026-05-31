@@ -33,6 +33,8 @@ export interface InboxTicket {
   preview: string | null;
   /** true, wenn die letzte Nachricht vom Kunden kam (noch unbeantwortet). */
   needsReply: boolean;
+  /** Zugeordnete Tags (für Chips in der Liste). */
+  tags: { id: string; name: string; color: string }[];
 }
 
 export interface TicketFilters {
@@ -43,6 +45,8 @@ export interface TicketFilters {
   statuses?: TicketStatus[];
   priority?: TicketPriority;
   search?: string;
+  /** Nur Tickets mit diesem Tag. */
+  tagId?: string;
 }
 
 /**
@@ -88,6 +92,17 @@ export async function listTickets(
 ): Promise<InboxTicket[]> {
   const supabase = await createClient();
 
+  // Tag-Filter: zuerst die Ticket-IDs zum Tag holen, dann einschränken.
+  let tagTicketIds: string[] | null = null;
+  if (filters.tagId) {
+    const { data: links } = await supabase
+      .from("ticket_tags")
+      .select("ticket_id")
+      .eq("tag_id", filters.tagId);
+    tagTicketIds = (links ?? []).map((l) => l.ticket_id);
+    if (tagTicketIds.length === 0) return [];
+  }
+
   let query = supabase
     .from("tickets")
     .select(
@@ -97,6 +112,7 @@ export async function listTickets(
     .order("created_at", { ascending: false })
     .limit(200);
 
+  if (tagTicketIds) query = query.in("id", tagTicketIds);
   if (filters.mailboxId) query = query.eq("mailbox_id", filters.mailboxId);
   if (filters.statuses && filters.statuses.length > 0) {
     query = query.in("status", filters.statuses);
@@ -122,15 +138,27 @@ export async function listTickets(
     string,
     { direction: MessageDirection; preview: string | null }
   >();
+  const tagsByTicket = new Map<string, { id: string; name: string; color: string }[]>();
   if (ticketIds.length > 0) {
-    const { data: latest } = await supabase.rpc("ticket_last_messages", {
-      p_ticket_ids: ticketIds,
-    });
+    const [{ data: latest }, { data: tagLinks }] = await Promise.all([
+      supabase.rpc("ticket_last_messages", { p_ticket_ids: ticketIds }),
+      supabase
+        .from("ticket_tags")
+        .select("ticket_id, tags(id, name, color)")
+        .in("ticket_id", ticketIds),
+    ]);
     for (const row of latest ?? []) {
       latestByTicket.set(row.ticket_id, {
         direction: row.direction,
         preview: row.preview,
       });
+    }
+    for (const link of tagLinks ?? []) {
+      const tag = link.tags as unknown as { id: string; name: string; color: string } | null;
+      if (!tag) continue;
+      const list = tagsByTicket.get(link.ticket_id) ?? [];
+      list.push(tag);
+      tagsByTicket.set(link.ticket_id, list);
     }
   }
 
@@ -153,6 +181,7 @@ export async function listTickets(
       preview: latest?.preview ? truncate(latest.preview, 120) : null,
       // unbeantwortet = letzte Nachricht kam vom Kunden (inbound)
       needsReply: latest ? latest.direction === "inbound" : false,
+      tags: tagsByTicket.get(t.id) ?? [],
     };
   });
 }
@@ -160,6 +189,15 @@ export async function listTickets(
 function truncate(s: string, n: number): string {
   const clean = s.replace(/\s+/g, " ").trim();
   return clean.length > n ? `${clean.slice(0, n)}…` : clean;
+}
+
+/** Tag-Katalog für den Inbox-Filter (alle eingeloggten dürfen lesen). */
+export async function listInboxTags(): Promise<
+  { id: string; name: string; color: string }[]
+> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("tags").select("id, name, color").order("name");
+  return data ?? [];
 }
 
 /** Kann der aktuelle User Tickets erstellen? (UI-Gating) */

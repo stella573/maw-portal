@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Send, Paperclip, X } from "lucide-react";
+import { Sparkles, Send, Paperclip, X, FileText } from "lucide-react";
+import type { ReplyTemplate } from "@/modules/maildesk/services/templates";
 
 interface PendingAttachment {
   id: string;
@@ -23,10 +24,12 @@ export function ReplyEditor({
   ticketId,
   hasCustomer,
   onTypingChange,
+  templates = [],
 }: {
   ticketId: string;
   hasCustomer: boolean;
   onTypingChange?: (typing: boolean) => void;
+  templates?: ReplyTemplate[];
 }) {
   const router = useRouter();
   const [body, setBody] = useState("");
@@ -84,6 +87,13 @@ export function ReplyEditor({
 
   function removeAttachment(id: string) {
     setAttachments((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  function insertTemplate(id: string) {
+    const tpl = templates.find((t) => t.id === id);
+    if (!tpl) return;
+    setBody((prev) => (prev.trim() ? `${prev}\n\n${tpl.body}` : tpl.body));
+    signalTyping();
   }
 
   async function handleSuggest() {
@@ -152,17 +162,41 @@ export function ReplyEditor({
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="text-sm font-medium">Antworten</h2>
-        <button
-          type="button"
-          onClick={handleSuggest}
-          disabled={suggesting || sending}
-          className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--background)] disabled:opacity-60"
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          {suggesting ? "KI denkt nach…" : "KI-Vorschlag"}
-        </button>
+        <div className="flex items-center gap-2">
+          {templates.length > 0 && (
+            <div className="relative inline-flex items-center">
+              <FileText className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-[var(--muted)]" />
+              <select
+                value=""
+                onChange={(e) => {
+                  insertTemplate(e.target.value);
+                  e.target.value = "";
+                }}
+                disabled={sending || suggesting}
+                title="Antwortvorlage einfügen"
+                className="rounded-lg border border-[var(--border)] bg-transparent py-1.5 pl-7 pr-2 text-xs outline-none focus:border-brand-500 disabled:opacity-60"
+              >
+                <option value="">Vorlage…</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleSuggest}
+            disabled={suggesting || sending}
+            className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--background)] disabled:opacity-60"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            {suggesting ? "KI denkt nach…" : "KI-Vorschlag"}
+          </button>
+        </div>
       </div>
 
       <textarea

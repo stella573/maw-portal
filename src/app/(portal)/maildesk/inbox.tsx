@@ -48,6 +48,8 @@ interface Props {
   view: InboxView;
   priority?: TicketPriority;
   search?: string;
+  allTags: { id: string; name: string; color: string }[];
+  tagId?: string;
   canCreate: boolean;
   currentUser: { profileId: string; name: string } | null;
 }
@@ -59,6 +61,8 @@ export function Inbox({
   view,
   priority,
   search,
+  allTags,
+  tagId,
   canCreate,
   currentUser,
 }: Props) {
@@ -96,6 +100,7 @@ export function Inbox({
       view,
       priority,
       q: search,
+      tag: tagId,
       ...patch,
     };
     for (const [k, v] of Object.entries(merged)) {
@@ -196,6 +201,20 @@ export function Inbox({
             </option>
           ))}
         </select>
+        {allTags.length > 0 && (
+          <select
+            value={tagId ?? ""}
+            onChange={(e) => updateQuery({ tag: e.target.value || undefined })}
+            className="rounded-lg border border-[var(--border)] bg-transparent px-2 py-2 text-sm outline-none focus:border-brand-500"
+          >
+            <option value="">Alle Tags</option>
+            {allTags.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        )}
         {canCreate && (
           <button
             onClick={() => setShowCreate((s) => !s)}
@@ -306,6 +325,20 @@ function TicketRow({
           {t.preview && (
             <div className="truncate text-xs text-[var(--foreground)]/70">
               {t.preview}
+            </div>
+          )}
+          {t.tags.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {t.tags.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px]"
+                  style={{ backgroundColor: `${tag.color}22`, color: tag.color }}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                  {tag.name}
+                </span>
+              ))}
             </div>
           )}
           <div className="flex items-center gap-2 truncate text-xs text-[var(--muted)]">

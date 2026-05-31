@@ -40,6 +40,12 @@ export interface AssignableAgent {
   name: string;
 }
 
+export interface TicketTag {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface TicketDetail {
   id: string;
   reference: string;
@@ -58,6 +64,10 @@ export interface TicketDetail {
   attachments: TicketDetailAttachment[];
   /** Mitglieder des Postfachs – mögliche Bearbeiter für die Zuweisung. */
   assignableAgents: AssignableAgent[];
+  /** Tags, die diesem Ticket zugeordnet sind. */
+  tags: TicketTag[];
+  /** Gesamter Tag-Katalog (für die Auswahl). */
+  allTags: TicketTag[];
 }
 
 /**
@@ -98,6 +108,19 @@ export async function getTicketDetail(
     .select("id, message_id, file_name, content_type, size_bytes")
     .eq("ticket_id", ticketId)
     .order("created_at", { ascending: true });
+
+  // Tags dieses Tickets + gesamter Tag-Katalog (für die Auswahl).
+  const [{ data: tagLinks }, { data: tagCatalog }] = await Promise.all([
+    supabase
+      .from("ticket_tags")
+      .select("tags(id, name, color)")
+      .eq("ticket_id", ticketId),
+    supabase.from("tags").select("id, name, color").order("name"),
+  ]);
+  const tags: TicketTag[] = (tagLinks ?? [])
+    .map((l) => l.tags as unknown as TicketTag | null)
+    .filter((t): t is TicketTag => t !== null);
+  const allTags: TicketTag[] = (tagCatalog ?? []) as TicketTag[];
 
   // Zuweisbare Bearbeiter = Mitglieder des Postfachs (RLS lässt nur erlaubte zu).
   let assignableAgents: AssignableAgent[] = [];
@@ -189,5 +212,7 @@ export async function getTicketDetail(
       sizeBytes: a.size_bytes,
     })),
     assignableAgents,
+    tags,
+    allTags,
   };
 }

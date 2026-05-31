@@ -129,6 +129,82 @@ export async function addNote(
 }
 
 // ----------------------------------------------------------------------------
+// Tags am Ticket anwenden / entfernen
+//   RLS (ticket_tags_write) erlaubt das für Owner/Admin, Assignee oder
+//   Postfach-Mitglieder des Tickets.
+// ----------------------------------------------------------------------------
+const tagSchema = z.object({
+  ticketId: z.string().uuid(),
+  tagId: z.string().uuid(),
+});
+
+export async function addTicketTag(
+  ticketId: string,
+  tagId: string,
+): Promise<ActionResult> {
+  try {
+    const ctx = await getCurrentUser();
+    if (!ctx) return { ok: false, message: "Nicht authentifiziert." };
+    const parsed = tagSchema.safeParse({ ticketId, tagId });
+    if (!parsed.success) return { ok: false, message: "Ungültige Eingabe." };
+
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("ticket_tags")
+      .insert({ ticket_id: parsed.data.ticketId, tag_id: parsed.data.tagId });
+    if (error && !/duplicate|unique/i.test(error.message)) {
+      return {
+        ok: false,
+        message: /policy|permission|row-level/i.test(error.message)
+          ? "Keine Berechtigung."
+          : error.message,
+      };
+    }
+
+    revalidatePath(`/maildesk/${parsed.data.ticketId}`);
+    revalidatePath("/maildesk");
+    return { ok: true, message: "Tag hinzugefügt." };
+  } catch (err) {
+    console.error("[ticket.addTicketTag]", err);
+    return { ok: false, message: "Unerwarteter Fehler." };
+  }
+}
+
+export async function removeTicketTag(
+  ticketId: string,
+  tagId: string,
+): Promise<ActionResult> {
+  try {
+    const ctx = await getCurrentUser();
+    if (!ctx) return { ok: false, message: "Nicht authentifiziert." };
+    const parsed = tagSchema.safeParse({ ticketId, tagId });
+    if (!parsed.success) return { ok: false, message: "Ungültige Eingabe." };
+
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("ticket_tags")
+      .delete()
+      .eq("ticket_id", parsed.data.ticketId)
+      .eq("tag_id", parsed.data.tagId);
+    if (error) {
+      return {
+        ok: false,
+        message: /policy|permission|row-level/i.test(error.message)
+          ? "Keine Berechtigung."
+          : error.message,
+      };
+    }
+
+    revalidatePath(`/maildesk/${parsed.data.ticketId}`);
+    revalidatePath("/maildesk");
+    return { ok: true, message: "Tag entfernt." };
+  } catch (err) {
+    console.error("[ticket.removeTicketTag]", err);
+    return { ok: false, message: "Unerwarteter Fehler." };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // Ticket zuweisen / Zuweisung aufheben
 // ----------------------------------------------------------------------------
 const assignSchema = z.object({

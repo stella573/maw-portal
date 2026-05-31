@@ -2,9 +2,9 @@
 
 import { useActionState, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, StickyNote, Paperclip, Check, RotateCcw, Eye, PenLine } from "lucide-react";
+import { ArrowLeft, StickyNote, Paperclip, Check, RotateCcw, Eye, PenLine, Tag as TagIcon, X, Plus } from "lucide-react";
 import Link from "next/link";
-import { updateTicket, addNote, assignTicket } from "./actions";
+import { updateTicket, addNote, assignTicket, addTicketTag, removeTicketTag } from "./actions";
 import { setTicketStatus } from "../actions";
 import {
   TICKET_STATUS_LABELS,
@@ -19,16 +19,19 @@ import type {
   TicketDetail,
   TicketDetailAttachment,
 } from "@/modules/maildesk/services/ticket-detail";
+import type { ReplyTemplate } from "@/modules/maildesk/services/templates";
 import { ReplyEditor } from "./reply-editor";
 
 export function TicketView({
   ticket,
   showDiagnostics = false,
   currentUser,
+  templates,
 }: {
   ticket: TicketDetail;
   showDiagnostics?: boolean;
   currentUser: { profileId: string; name: string } | null;
+  templates: ReplyTemplate[];
 }) {
   // Live: Status-/Zuweisungs-Änderungen und neue Nachrichten sofort spiegeln.
   useRealtimeRefresh([
@@ -121,12 +124,14 @@ export function TicketView({
             ticketId={ticket.id}
             hasCustomer={!!ticket.customerEmail}
             onTypingChange={setTyping}
+            templates={templates}
           />
         </div>
 
         {/* Seitenspalte: Steuerung + Kunde + Notizen */}
         <div className="space-y-4">
           <TicketControls ticket={ticket} />
+          <TagsCard ticket={ticket} />
           <CustomerCard ticket={ticket} />
           <NotesCard ticket={ticket} />
         </div>
@@ -316,6 +321,90 @@ function AssignControl({ ticket }: { ticket: TicketDetail }) {
         </p>
       )}
     </form>
+  );
+}
+
+function TagsCard({ ticket }: { ticket: TicketDetail }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const usedIds = new Set(ticket.tags.map((t) => t.id));
+  const available = ticket.allTags.filter((t) => !usedIds.has(t.id));
+
+  function apply(tagId: string) {
+    if (!tagId) return;
+    startTransition(async () => {
+      await addTicketTag(ticket.id, tagId);
+      router.refresh();
+    });
+  }
+  function remove(tagId: string) {
+    startTransition(async () => {
+      await removeTicketTag(ticket.id, tagId);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+      <h2 className="flex items-center gap-1.5 text-sm font-medium">
+        <TagIcon className="h-4 w-4" /> Tags
+      </h2>
+      <div className={`mt-3 flex flex-wrap gap-1.5 ${pending ? "opacity-60" : ""}`}>
+        {ticket.tags.length === 0 && (
+          <span className="text-xs text-[var(--muted)]">Keine Tags.</span>
+        )}
+        {ticket.tags.map((t) => (
+          <span
+            key={t.id}
+            className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs"
+            style={{
+              backgroundColor: `${t.color}22`,
+              color: t.color,
+            }}
+          >
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{ backgroundColor: t.color }}
+            />
+            {t.name}
+            <button
+              type="button"
+              onClick={() => remove(t.id)}
+              disabled={pending}
+              aria-label={`Tag ${t.name} entfernen`}
+              className="opacity-70 transition hover:opacity-100"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+      </div>
+
+      {available.length > 0 ? (
+        <div className="mt-3 flex items-center gap-1.5">
+          <Plus className="h-3.5 w-3.5 text-[var(--muted)]" />
+          <select
+            value=""
+            disabled={pending}
+            onChange={(e) => apply(e.target.value)}
+            className="flex-1 rounded-lg border border-[var(--border)] bg-transparent px-2 py-1.5 text-sm outline-none focus:border-brand-500"
+          >
+            <option value="">Tag hinzufügen…</option>
+            {available.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : (
+        ticket.allTags.length === 0 && (
+          <p className="mt-3 text-xs text-[var(--muted)]">
+            Noch keine Tags angelegt – unter Einstellungen → Tags.
+          </p>
+        )
+      )}
+    </div>
   );
 }
 

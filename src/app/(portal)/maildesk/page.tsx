@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import {
   getInboxMailboxes,
   listTickets,
+  listInboxTags,
   canCreateTickets,
   type TicketFilters,
 } from "@/modules/maildesk/services/tickets";
@@ -38,12 +39,14 @@ export default async function MailDeskPage({
     view?: string;
     priority?: string;
     q?: string;
+    tag?: string;
   }>;
 }) {
   const sp = await searchParams;
-  const [mailboxes, ctx] = await Promise.all([
+  const [mailboxes, ctx, allTags] = await Promise.all([
     getInboxMailboxes(),
     getCurrentUser(),
+    listInboxTags(),
   ]);
 
   // Standard-Postfach: aus Query oder erstes verfügbares.
@@ -57,6 +60,7 @@ export default async function MailDeskPage({
     statuses: statusesForView(view),
     priority: sp.priority as TicketPriority | undefined,
     search: sp.q,
+    tagId: sp.tag,
   };
 
   const [tickets, canCreate] = await Promise.all([
@@ -81,6 +85,8 @@ export default async function MailDeskPage({
         view={view}
         priority={sp.priority as TicketPriority | undefined}
         search={sp.q}
+        allTags={allTags}
+        tagId={sp.tag}
         canCreate={canCreate}
         currentUser={currentUser}
       />
