@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/services/auth/current-user";
 import { can } from "@/lib/auth/permissions";
@@ -88,19 +89,22 @@ function nextDay(day: string): string {
   return isoDate(d);
 }
 
-/**
- * Tages-Cache je (clientId|endpoint|tag). Vergangene Tage sind in ROLLER
- * unveränderlich → lange Haltedauer; nur der heutige Tag wird häufig erneuert.
- * Das senkt die Last gegen die (rate-limitierte) Data API massiv: Statt bei
- * jedem Seitenaufruf den kompletten Zeitraum neu zu laden, wird i. d. R. nur
- * noch „heute" abgefragt → schnelle Reloads, kein Timeout/„Hängen".
- */
-const PAST_TTL_MS = 12 * 60 * 60 * 1000; // 12 h
-const TODAY_TTL_MS = 60 * 1000; // 60 s
-const dayCache = new Map<string, { rows: Json[]; expiresAt: number }>();
-const inflight = new Map<string, Promise<Json[]>>();
+function extractRows(res: unknown): Json[] {
+  if (Array.isArray(res)) return res as Json[];
+  const o = (res ?? {}) as Json;
+  for (const k of ["data", "items", "results", "records"]) {
+    if (Array.isArray(o[k])) return o[k] as Json[];
+  }
+  return [];
+}
 
-async function fetchDayUncached(creds: RollerCreds, path: string, day: string): Promise<Json[]> {
+/**
+ * Holt alle Seiten eines Data-API-Endpunkts für genau einen Tag.
+ * Die ROLLER Data API erlaubt pro Request nur ein Fenster von max. 1 Tag
+ * ("startDate and endDate must be within 1 day(s)"), daher wird je Tag einzeln
+ * (startDate=Tag, endDate=Folgetag) abgefragt.
+ */
+async function fetchDayRows(creds: RollerCreds, path: string, day: string): Promise<Json[]> {
   const out: Json[] = [];
   const pageSize = 100;
   const startDate = day;
@@ -115,59 +119,70 @@ async function fetchDayUncached(creds: RollerCreds, path: string, day: string): 
   return out;
 }
 
-/** Holt alle Seiten eines Data-API-Endpunkts für genau einen Tag – mit Cache. */
-async function fetchDay(creds: RollerCreds, path: string, day: string): Promise<Json[]> {
-  const key = `${creds.clientId}|${path}|${day}`;
-  const now = Date.now();
-
-  const cached = dayCache.get(key);
-  if (cached && cached.expiresAt > now) return cached.rows;
-
-  // Laufende Abfrage desselben Tages wiederverwenden (kein doppeltes Fetchen).
-  const running = inflight.get(key);
-  if (running) return running;
-
-  const today = isoDate(new Date());
-  const p = fetchDayUncached(creds, path, day)
-    .then((rows) => {
-      const ttl = day < today ? PAST_TTL_MS : TODAY_TTL_MS;
-      dayCache.set(key, { rows, expiresAt: Date.now() + ttl });
-      return rows;
-    })
-    .finally(() => inflight.delete(key));
-
-  inflight.set(key, p);
-  return p;
+interface DayAggregate {
+  revenue: number;
+  bookings: number;
+  visitors: number;
+  currency: string | null;
 }
 
 /**
- * Holt alle Seiten eines Data-API-Endpunkts für mehrere Tage.
- * Die ROLLER Data API erlaubt pro Request nur ein Fenster von max. 1 Tag
- * ("startDate and endDate must be within 1 day(s)"), daher wird je Tag einzeln
- * (startDate=Tag, endDate=Folgetag) abgefragt.
- *
- * Jede Zeile wird mit ihrem Abfragetag (`day`) zurückgegeben: Da die API bereits
- * serverseitig auf dieses Tagesfenster filtert, ist der Abfragetag die korrekte
- * Tageszuordnung – unabhängig davon, welche/ob Datumsfelder in der Zeile stehen.
+ * Aggregiert alle drei Quellen für genau einen Tag zu kompakten Kennzahlen.
+ * Die Tageszuordnung ergibt sich aus dem serverseitigen Datumsfilter der API –
+ * unabhängig davon, welche/ob Datumsfelder in den Zeilen stehen.
  */
-async function fetchAll(
-  creds: RollerCreds,
-  path: string,
-  days: string[],
-): Promise<{ day: string; row: Json }[]> {
-  const perDay = await Promise.all(
-    days.map(async (d) => (await fetchDay(creds, path, d)).map((row) => ({ day: d, row }))),
-  );
-  return perDay.flat();
+async function aggregateDayUncached(creds: RollerCreds, day: string): Promise<DayAggregate> {
+  const [payments, bookings, attendances] = await Promise.all([
+    fetchDayRows(creds, "/data/bookingpayments", day),
+    fetchDayRows(creds, "/data/bookingitems", day),
+    fetchDayRows(creds, "/data/attendances", day),
+  ]);
+
+  let revenue = 0;
+  let currency: string | null = null;
+  for (const p of payments) {
+    revenue += num(pick(p, ["amount", "amountPaid", "paymentAmount", "total", "value"]));
+    const cur = pick(p, ["currency", "currencyCode"]);
+    if (typeof cur === "string" && cur) currency = cur;
+  }
+
+  let visitors = 0;
+  for (const a of attendances) {
+    visitors += num(pick(a, ["quantity", "count", "guests", "attendanceCount"])) || 1;
+  }
+
+  return { revenue, bookings: bookings.length, visitors, currency };
 }
 
-function extractRows(res: unknown): Json[] {
-  if (Array.isArray(res)) return res as Json[];
-  const o = (res ?? {}) as Json;
-  for (const k of ["data", "items", "results", "records"]) {
-    if (Array.isArray(o[k])) return o[k] as Json[];
-  }
-  return [];
+/**
+ * Persistenter Tages-Cache (Next.js Data Cache, überlebt Serverless-Cold-Starts):
+ * Vergangene Tage sind in ROLLER unveränderlich → 7 Tage Haltedauer; „heute"
+ * → 2 Minuten. Dadurch lädt ein Seitenaufruf praktisch nur noch „heute" neu →
+ * schnelle Reloads, kein Funktions-Timeout/„weiße Felder" mehr.
+ *
+ * Die Zugangsdaten werden je Invocation registriert und im Cache-Wrapper über
+ * die clientId aufgelöst, damit das Secret nicht Teil des Cache-Keys wird.
+ */
+const credsByClient = new Map<string, RollerCreds>();
+
+function cachedAggregate(revalidate: number, variant: string) {
+  return unstable_cache(
+    async (clientId: string, day: string): Promise<DayAggregate> => {
+      const creds = credsByClient.get(clientId);
+      if (!creds) throw new Error("ROLLER-Zugangsdaten nicht verfügbar.");
+      return aggregateDayUncached(creds, day);
+    },
+    ["roller-day-aggregate", variant],
+    { revalidate },
+  );
+}
+
+const aggregatePast = cachedAggregate(60 * 60 * 24 * 7, "past"); // 7 Tage
+const aggregateToday = cachedAggregate(120, "today"); // 2 Minuten
+
+async function dayAggregate(creds: RollerCreds, day: string, today: string): Promise<DayAggregate> {
+  credsByClient.set(creds.clientId, creds);
+  return day < today ? aggregatePast(creds.clientId, day) : aggregateToday(creds.clientId, day);
 }
 
 async function analyticsForLocation(
@@ -196,36 +211,26 @@ async function analyticsForLocation(
   const byDay = new Map(base.series.map((p) => [p.date, p]));
 
   try {
-    const [payments, bookings, attendances] = await Promise.all([
-      fetchAll(creds, "/data/bookingpayments", days),
-      fetchAll(creds, "/data/bookingitems", days),
-      fetchAll(creds, "/data/attendances", days),
-    ]);
+    const aggregates = await Promise.all(days.map((d) => dayAggregate(creds, d, today)));
 
-    for (const { day, row: p } of payments) {
-      const amount = num(pick(p, ["amount", "amountPaid", "paymentAmount", "total", "value"]));
-      const cur = pick(p, ["currency", "currencyCode"]);
-      if (typeof cur === "string" && cur) base.currency = cur;
-      const pt = byDay.get(day);
-      if (pt) pt.revenue += amount;
-      base.revenueTotal += amount;
-      if (day === today) base.revenueToday += amount;
-    }
-
-    for (const { day } of bookings) {
-      const pt = byDay.get(day);
-      if (pt) pt.bookings += 1;
-      base.bookingsTotal += 1;
-      if (day === today) base.bookingsToday += 1;
-    }
-
-    for (const { day, row: a } of attendances) {
-      const qty = num(pick(a, ["quantity", "count", "guests", "attendanceCount"])) || 1;
-      const pt = byDay.get(day);
-      if (pt) pt.visitors += qty;
-      base.visitorsTotal += qty;
-      if (day === today) base.visitorsToday += qty;
-    }
+    days.forEach((d, i) => {
+      const agg = aggregates[i]!;
+      if (agg.currency) base.currency = agg.currency;
+      const pt = byDay.get(d);
+      if (pt) {
+        pt.revenue += agg.revenue;
+        pt.bookings += agg.bookings;
+        pt.visitors += agg.visitors;
+      }
+      base.revenueTotal += agg.revenue;
+      base.bookingsTotal += agg.bookings;
+      base.visitorsTotal += agg.visitors;
+      if (d === today) {
+        base.revenueToday += agg.revenue;
+        base.bookingsToday += agg.bookings;
+        base.visitorsToday += agg.visitors;
+      }
+    });
   } catch (err) {
     base.error = err instanceof Error ? err.message : "Daten konnten nicht geladen werden.";
   }

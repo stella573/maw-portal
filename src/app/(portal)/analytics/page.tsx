@@ -11,6 +11,9 @@ import { AnalyticsView } from "./analytics-view";
  * ROLLER-Aufrufe brauchen etwas Zeit → keine statische Vorberechnung.
  */
 export const dynamic = "force-dynamic";
+// Erstbefüllung des Tages-Caches kann (rate-limitiert) etwas dauern → nicht
+// vorzeitig vom Serverless-Timeout abbrechen lassen.
+export const maxDuration = 60;
 
 export default async function AnalyticsPage({
   searchParams,
