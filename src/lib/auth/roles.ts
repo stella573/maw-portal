@@ -33,6 +33,7 @@ export const PERMISSIONS = [
   "signatures.manage",
   "employees.read",
   "employees.manage",
+  "integrations.manage",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];

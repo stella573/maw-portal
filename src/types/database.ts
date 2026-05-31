@@ -357,6 +357,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      roller_connections: {
+        Row: {
+          location_id: string;
+          base_url: string;
+          client_id: string;
+          client_secret: string;
+          is_active: boolean;
+          venue_name: string | null;
+          last_verified_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          location_id: string;
+          base_url?: string;
+          client_id: string;
+          client_secret: string;
+          is_active?: boolean;
+          venue_name?: string | null;
+          last_verified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          location_id?: string;
+          base_url?: string;
+          client_id?: string;
+          client_secret?: string;
+          is_active?: boolean;
+          venue_name?: string | null;
+          last_verified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       personio_employees: {
         Row: {
           personio_id: number;

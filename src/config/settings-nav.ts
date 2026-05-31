@@ -6,6 +6,7 @@ import {
   PenLine,
   Tag,
   FileText,
+  Plug,
   type LucideIcon,
 } from "lucide-react";
 import type { Permission } from "@/lib/auth/roles";
@@ -77,5 +78,13 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     icon: ShieldCheck,
     permission: "roles.manage",
     description: "Welche Rolle welche Rechte hat",
+  },
+  {
+    key: "integrations",
+    label: "Integrationen",
+    href: "/settings/integrations",
+    icon: Plug,
+    permission: "integrations.manage",
+    description: "ROLLER-API je Standort anbinden",
   },
 ];
