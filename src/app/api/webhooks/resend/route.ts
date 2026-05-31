@@ -221,11 +221,13 @@ export async function POST(request: NextRequest) {
   let matchedByReference = false;
   const reference = extractTicketReference(subject);
   if (reference) {
+    // Referenz ist global eindeutig → KEINE Einschränkung auf das empfangende
+    // Postfach. So thready eine Antwort auch dann ins richtige Ticket, wenn sie
+    // (durch Senden aus einem anderen Postfach) an einer anderen Adresse ankommt.
     const { data: byRef } = await supabase
       .from("tickets")
       .select("id")
       .eq("reference", reference)
-      .eq("mailbox_id", mailboxId)
       .maybeSingle();
     if (byRef) {
       ticketId = byRef.id;
