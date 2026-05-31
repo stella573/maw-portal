@@ -368,6 +368,7 @@ export type Database = {
           office: string | null;
           status: string;
           profile_id: string | null;
+          location_id: string | null;
           synced_at: string;
           created_at: string;
         };
@@ -381,6 +382,7 @@ export type Database = {
           office?: string | null;
           status?: string;
           profile_id?: string | null;
+          location_id?: string | null;
           synced_at?: string;
           created_at?: string;
         };
@@ -394,6 +396,7 @@ export type Database = {
           office?: string | null;
           status?: string;
           profile_id?: string | null;
+          location_id?: string | null;
           synced_at?: string;
           created_at?: string;
         };

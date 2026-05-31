@@ -141,7 +141,7 @@ function EmployeeRow({
         </td>
         <td className="px-4 py-3">{emp.position ?? "—"}</td>
         <td className="px-4 py-3">{emp.department ?? "—"}</td>
-        <td className="px-4 py-3">{emp.office ?? "—"}</td>
+        <td className="px-4 py-3">{emp.locationName ?? emp.office ?? "—"}</td>
         <td className="px-4 py-3">
           <span
             className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[emp.status] ?? "bg-slate-500/15 text-slate-500"}`}
@@ -210,6 +210,7 @@ function EmployeeRow({
                 <label className="block text-xs text-[var(--muted)]">Standort</label>
                 <select
                   name="locationId"
+                  defaultValue={emp.locationId ?? ""}
                   className="mt-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1.5 text-sm"
                 >
                   <option value="">global</option>
