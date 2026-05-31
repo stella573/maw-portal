@@ -81,21 +81,6 @@ function isoDate(d: Date): string {
   }).format(d);
 }
 
-function dayKeyFromRow(row: Json, fallback: string): string {
-  const raw = pick(row, [
-    "date",
-    "paymentDate",
-    "transactionDate",
-    "bookingDate",
-    "attendanceDate",
-    "createdDate",
-    "created",
-    "modifiedDate",
-  ]);
-  if (typeof raw === "string" && raw.length >= 10) return raw.slice(0, 10);
-  return fallback;
-}
-
 /** Folgetag (yyyy-mm-dd). endDate ist bei der Data API exklusiv/Folgetag-orientiert. */
 function nextDay(day: string): string {
   const d = new Date(`${day}T00:00:00`);
@@ -103,8 +88,19 @@ function nextDay(day: string): string {
   return isoDate(d);
 }
 
-/** Holt alle Seiten eines Data-API-Endpunkts für genau einen Tag (startDate..Folgetag). */
-async function fetchDay(creds: RollerCreds, path: string, day: string): Promise<Json[]> {
+/**
+ * Tages-Cache je (clientId|endpoint|tag). Vergangene Tage sind in ROLLER
+ * unveränderlich → lange Haltedauer; nur der heutige Tag wird häufig erneuert.
+ * Das senkt die Last gegen die (rate-limitierte) Data API massiv: Statt bei
+ * jedem Seitenaufruf den kompletten Zeitraum neu zu laden, wird i. d. R. nur
+ * noch „heute" abgefragt → schnelle Reloads, kein Timeout/„Hängen".
+ */
+const PAST_TTL_MS = 12 * 60 * 60 * 1000; // 12 h
+const TODAY_TTL_MS = 60 * 1000; // 60 s
+const dayCache = new Map<string, { rows: Json[]; expiresAt: number }>();
+const inflight = new Map<string, Promise<Json[]>>();
+
+async function fetchDayUncached(creds: RollerCreds, path: string, day: string): Promise<Json[]> {
   const out: Json[] = [];
   const pageSize = 100;
   const startDate = day;
@@ -119,14 +115,49 @@ async function fetchDay(creds: RollerCreds, path: string, day: string): Promise<
   return out;
 }
 
+/** Holt alle Seiten eines Data-API-Endpunkts für genau einen Tag – mit Cache. */
+async function fetchDay(creds: RollerCreds, path: string, day: string): Promise<Json[]> {
+  const key = `${creds.clientId}|${path}|${day}`;
+  const now = Date.now();
+
+  const cached = dayCache.get(key);
+  if (cached && cached.expiresAt > now) return cached.rows;
+
+  // Laufende Abfrage desselben Tages wiederverwenden (kein doppeltes Fetchen).
+  const running = inflight.get(key);
+  if (running) return running;
+
+  const today = isoDate(new Date());
+  const p = fetchDayUncached(creds, path, day)
+    .then((rows) => {
+      const ttl = day < today ? PAST_TTL_MS : TODAY_TTL_MS;
+      dayCache.set(key, { rows, expiresAt: Date.now() + ttl });
+      return rows;
+    })
+    .finally(() => inflight.delete(key));
+
+  inflight.set(key, p);
+  return p;
+}
+
 /**
  * Holt alle Seiten eines Data-API-Endpunkts für mehrere Tage.
  * Die ROLLER Data API erlaubt pro Request nur ein Fenster von max. 1 Tag
  * ("startDate and endDate must be within 1 day(s)"), daher wird je Tag einzeln
- * (startDate=Tag, endDate=Folgetag) abgefragt und das Ergebnis zusammengeführt.
+ * (startDate=Tag, endDate=Folgetag) abgefragt.
+ *
+ * Jede Zeile wird mit ihrem Abfragetag (`day`) zurückgegeben: Da die API bereits
+ * serverseitig auf dieses Tagesfenster filtert, ist der Abfragetag die korrekte
+ * Tageszuordnung – unabhängig davon, welche/ob Datumsfelder in der Zeile stehen.
  */
-async function fetchAll(creds: RollerCreds, path: string, days: string[]): Promise<Json[]> {
-  const perDay = await Promise.all(days.map((d) => fetchDay(creds, path, d)));
+async function fetchAll(
+  creds: RollerCreds,
+  path: string,
+  days: string[],
+): Promise<{ day: string; row: Json }[]> {
+  const perDay = await Promise.all(
+    days.map(async (d) => (await fetchDay(creds, path, d)).map((row) => ({ day: d, row }))),
+  );
   return perDay.flat();
 }
 
@@ -171,9 +202,8 @@ async function analyticsForLocation(
       fetchAll(creds, "/data/attendances", days),
     ]);
 
-    for (const p of payments) {
+    for (const { day, row: p } of payments) {
       const amount = num(pick(p, ["amount", "amountPaid", "paymentAmount", "total", "value"]));
-      const day = dayKeyFromRow(p, today);
       const cur = pick(p, ["currency", "currencyCode"]);
       if (typeof cur === "string" && cur) base.currency = cur;
       const pt = byDay.get(day);
@@ -182,17 +212,15 @@ async function analyticsForLocation(
       if (day === today) base.revenueToday += amount;
     }
 
-    for (const b of bookings) {
-      const day = dayKeyFromRow(b, today);
+    for (const { day } of bookings) {
       const pt = byDay.get(day);
       if (pt) pt.bookings += 1;
       base.bookingsTotal += 1;
       if (day === today) base.bookingsToday += 1;
     }
 
-    for (const a of attendances) {
+    for (const { day, row: a } of attendances) {
       const qty = num(pick(a, ["quantity", "count", "guests", "attendanceCount"])) || 1;
-      const day = dayKeyFromRow(a, today);
       const pt = byDay.get(day);
       if (pt) pt.visitors += qty;
       base.visitorsTotal += qty;
