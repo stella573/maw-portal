@@ -3,7 +3,7 @@
 import { useActionState, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Inbox as InboxIcon, Check, RotateCcw, Eye, PenLine } from "lucide-react";
+import { Plus, Search, Inbox as InboxIcon, Check, RotateCcw, Eye, PenLine, Loader2 } from "lucide-react";
 import { createTicket, setTicketStatus, type ActionResult } from "./actions";
 import type {
   InboxMailbox,
@@ -64,6 +64,9 @@ export function Inbox({
 }: Props) {
   const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
+  // Navigation (Tab-/Filter-/Postfachwechsel) als Transition: die aktuelle
+  // Liste bleibt sichtbar, während die neuen Daten laden → kein „Hängen".
+  const [isPending, startTransition] = useTransition();
 
   // Live: Ticket-Änderungen (Status, Zuweisung, neue Vorgänge) sofort spiegeln.
   // RLS filtert serverseitig – wir laden bei einem Event einfach neu.
@@ -98,7 +101,9 @@ export function Inbox({
     for (const [k, v] of Object.entries(merged)) {
       if (v) params.set(k, v);
     }
-    router.push(`/maildesk?${params.toString()}`);
+    startTransition(() => {
+      router.push(`/maildesk?${params.toString()}`);
+    });
   }
 
   if (mailboxes.length === 0) {
@@ -159,6 +164,9 @@ export function Inbox({
             </button>
           ))}
         </div>
+        {isPending && (
+          <Loader2 className="h-4 w-4 animate-spin text-[var(--muted)]" aria-label="Lädt" />
+        )}
       </div>
 
       {/* Filterleiste */}
@@ -205,8 +213,10 @@ export function Inbox({
         />
       )}
 
-      {/* Ticketliste */}
-      <TicketList tickets={tickets} peersByTicket={peersByTicket} />
+      {/* Ticketliste – bleibt während des Wechsels sichtbar (nur gedimmt) */}
+      <div className={isPending ? "pointer-events-none opacity-50 transition-opacity" : "transition-opacity"}>
+        <TicketList tickets={tickets} peersByTicket={peersByTicket} />
+      </div>
     </div>
   );
 }

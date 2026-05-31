@@ -591,6 +591,16 @@ export type Database = {
         };
         Returns: string;
       };
+      ticket_last_messages: {
+        Args: {
+          p_ticket_ids: string[];
+        };
+        Returns: {
+          ticket_id: string;
+          direction: MessageDirection;
+          preview: string | null;
+        }[];
+      };
     };
     Enums: {
       ticket_status: TicketStatus;

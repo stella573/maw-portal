@@ -115,24 +115,22 @@ export async function listTickets(
   const ticketIds = (data ?? []).map((t) => t.id);
 
   // Letzte Nachricht je Ticket für Vorschau + "unbeantwortet"-Markierung.
-  // Eine Abfrage über alle gelisteten Tickets, dann je Ticket die neueste.
+  // DB-seitig (DISTINCT ON) → nur EINE bereits gekürzte/HTML-bereinigte Zeile
+  // je Ticket statt aller (großen) Nachrichten-Bodies. Deutlich schneller,
+  // besonders im "Alle"-Tab.
   const latestByTicket = new Map<
     string,
-    { direction: MessageDirection; body: string | null }
+    { direction: MessageDirection; preview: string | null }
   >();
   if (ticketIds.length > 0) {
-    const { data: msgs } = await supabase
-      .from("messages")
-      .select("ticket_id, direction, body_text, body_html, created_at")
-      .in("ticket_id", ticketIds)
-      .order("created_at", { ascending: false });
-    for (const m of msgs ?? []) {
-      // dank Sortierung ist der erste Treffer je Ticket der neueste
-      if (latestByTicket.has(m.ticket_id)) continue;
-      const body = (m.body_text && m.body_text.trim())
-        ? m.body_text
-        : stripToText(m.body_html);
-      latestByTicket.set(m.ticket_id, { direction: m.direction, body });
+    const { data: latest } = await supabase.rpc("ticket_last_messages", {
+      p_ticket_ids: ticketIds,
+    });
+    for (const row of latest ?? []) {
+      latestByTicket.set(row.ticket_id, {
+        direction: row.direction,
+        preview: row.preview,
+      });
     }
   }
 
@@ -152,22 +150,11 @@ export async function listTickets(
       customerName: c?.full_name ?? null,
       lastMessageAt: t.last_message_at,
       createdAt: t.created_at,
-      preview: latest?.body ? truncate(latest.body, 120) : null,
+      preview: latest?.preview ? truncate(latest.preview, 120) : null,
       // unbeantwortet = letzte Nachricht kam vom Kunden (inbound)
       needsReply: latest ? latest.direction === "inbound" : false,
     };
   });
-}
-
-function stripToText(html: string | null): string | null {
-  if (!html) return null;
-  const t = html
-    .replace(/<\s*br\s*\/?>/gi, " ")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return t || null;
 }
 
 function truncate(s: string, n: number): string {
