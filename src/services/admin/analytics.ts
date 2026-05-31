@@ -96,15 +96,19 @@ function dayKeyFromRow(row: Json, fallback: string): string {
   return fallback;
 }
 
-/** Holt alle Seiten eines Data-API-Endpunkts für einen Zeitraum. */
-async function fetchAll(
-  creds: RollerCreds,
-  path: string,
-  startDate: string,
-  endDate: string,
-): Promise<Json[]> {
+/** Folgetag (yyyy-mm-dd). endDate ist bei der Data API exklusiv/Folgetag-orientiert. */
+function nextDay(day: string): string {
+  const d = new Date(`${day}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  return isoDate(d);
+}
+
+/** Holt alle Seiten eines Data-API-Endpunkts für genau einen Tag (startDate..Folgetag). */
+async function fetchDay(creds: RollerCreds, path: string, day: string): Promise<Json[]> {
   const out: Json[] = [];
   const pageSize = 100;
+  const startDate = day;
+  const endDate = nextDay(day);
   for (let page = 1; page <= 50; page++) {
     const url = `${path}?startDate=${startDate}&endDate=${endDate}&pageNumber=${page}&pageSize=${pageSize}`;
     const res = await rollerRequest<unknown>(creds, url);
@@ -113,6 +117,17 @@ async function fetchAll(
     if (rows.length < pageSize) break;
   }
   return out;
+}
+
+/**
+ * Holt alle Seiten eines Data-API-Endpunkts für mehrere Tage.
+ * Die ROLLER Data API erlaubt pro Request nur ein Fenster von max. 1 Tag
+ * ("startDate and endDate must be within 1 day(s)"), daher wird je Tag einzeln
+ * (startDate=Tag, endDate=Folgetag) abgefragt und das Ergebnis zusammengeführt.
+ */
+async function fetchAll(creds: RollerCreds, path: string, days: string[]): Promise<Json[]> {
+  const perDay = await Promise.all(days.map((d) => fetchDay(creds, path, d)));
+  return perDay.flat();
 }
 
 function extractRows(res: unknown): Json[] {
@@ -147,19 +162,13 @@ async function analyticsForLocation(
   };
   if (!creds) return base;
 
-  const startDate = days[0]!;
-  // Data API: endDate ist exklusiv-/Folgetag-orientiert → heute +1 Tag.
-  const end = new Date(`${today}T00:00:00`);
-  end.setDate(end.getDate() + 1);
-  const endDate = isoDate(end);
-
   const byDay = new Map(base.series.map((p) => [p.date, p]));
 
   try {
     const [payments, bookings, attendances] = await Promise.all([
-      fetchAll(creds, "/data/bookingpayments", startDate, endDate),
-      fetchAll(creds, "/data/bookingitems", startDate, endDate),
-      fetchAll(creds, "/data/attendances", startDate, endDate),
+      fetchAll(creds, "/data/bookingpayments", days),
+      fetchAll(creds, "/data/bookingitems", days),
+      fetchAll(creds, "/data/attendances", days),
     ]);
 
     for (const p of payments) {
