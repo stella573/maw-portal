@@ -31,6 +31,8 @@ export const PERMISSIONS = [
   "mailboxes.manage",
   "mailboxes.send_as",
   "signatures.manage",
+  "employees.read",
+  "employees.manage",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -56,6 +58,8 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly Permission[]> = {
     "mailboxes.manage",
     "mailboxes.send_as",
     "signatures.manage",
+    "employees.read",
+    "employees.manage",
   ],
   employee: [
     "tickets.read",
@@ -66,6 +70,7 @@ export const ROLE_PERMISSIONS: Record<RoleKey, readonly Permission[]> = {
     "customers.read",
     "notes.create",
     "templates.read",
+    "employees.read",
   ],
 };
 

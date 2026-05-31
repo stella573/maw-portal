@@ -16,10 +16,17 @@ export default function LoginPage() {
   const [status, setStatus] = useState<Status>("idle");
   const [message, setMessage] = useState("");
 
-  // Eventuelle Fehler aus einem Redirect (?error=...) anzeigen.
+  // Eventuelle Fehler aus einem Redirect (?error=... / ?deactivated=1) anzeigen.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const err = params.get("error");
+    if (params.get("deactivated") === "1") {
+      setStatus("error");
+      setMessage(
+        "Dein Zugang ist deaktiviert (in Personio inaktiv). Bitte wende dich an die Personalabteilung.",
+      );
+      return;
+    }
     if (err) {
       setStatus("error");
       setMessage(decodeURIComponent(err));

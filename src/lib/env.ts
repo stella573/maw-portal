@@ -41,6 +41,12 @@ const serverSchema = z.object({
   RESEND_WEBHOOK_SECRET: z.string().min(1).optional(),
   RESEND_FROM_EMAIL: z.string().email().optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  // Personio-Integration (Mitarbeiter-Sync). Optional, damit Build/Start ohne
+  // diese Werte nicht bricht – der Sync meldet zur Laufzeit klar, wenn sie fehlen.
+  PERSONIO_CLIENT_ID: z.string().min(1).optional(),
+  PERSONIO_CLIENT_SECRET: z.string().min(1).optional(),
+  // Schützt den Cron-Sync-Endpoint (Vercel Cron sendet diesen als Bearer-Token).
+  PERSONIO_SYNC_SECRET: z.string().min(1).optional(),
 });
 
 type PublicEnv = z.infer<typeof publicSchema>;
@@ -112,5 +118,8 @@ export function getServerEnv() {
     RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
+    PERSONIO_CLIENT_ID: process.env.PERSONIO_CLIENT_ID,
+    PERSONIO_CLIENT_SECRET: process.env.PERSONIO_CLIENT_SECRET,
+    PERSONIO_SYNC_SECRET: process.env.PERSONIO_SYNC_SECRET,
   });
 }

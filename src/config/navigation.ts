@@ -34,7 +34,7 @@ export interface NavItem {
 export const NAVIGATION: NavItem[] = [
   { key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, status: "active" },
   { key: "maildesk", label: "MailDesk", href: "/maildesk", icon: Inbox, status: "active", permission: "tickets.read" },
-  { key: "employees", label: "Mitarbeiter", href: "/employees", icon: Users, status: "planned" },
+  { key: "employees", label: "Mitarbeiter", href: "/employees", icon: Users, status: "active", permission: "employees.read" },
   { key: "schedule", label: "Dienstplan", href: "/schedule", icon: CalendarDays, status: "planned" },
   { key: "tasks", label: "Aufgaben", href: "/tasks", icon: CheckSquare, status: "planned" },
   { key: "checklists", label: "Checklisten", href: "/checklists", icon: ListChecks, status: "planned" },

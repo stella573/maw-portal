@@ -357,6 +357,48 @@ export type Database = {
         };
         Relationships: [];
       };
+      personio_employees: {
+        Row: {
+          personio_id: number;
+          email: string | null;
+          first_name: string | null;
+          last_name: string | null;
+          position: string | null;
+          department: string | null;
+          office: string | null;
+          status: string;
+          profile_id: string | null;
+          synced_at: string;
+          created_at: string;
+        };
+        Insert: {
+          personio_id: number;
+          email?: string | null;
+          first_name?: string | null;
+          last_name?: string | null;
+          position?: string | null;
+          department?: string | null;
+          office?: string | null;
+          status?: string;
+          profile_id?: string | null;
+          synced_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          personio_id?: number;
+          email?: string | null;
+          first_name?: string | null;
+          last_name?: string | null;
+          position?: string | null;
+          department?: string | null;
+          office?: string | null;
+          status?: string;
+          profile_id?: string | null;
+          synced_at?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       mailbox_aliases: {
         Row: {
           id: string;
