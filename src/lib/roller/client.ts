@@ -30,13 +30,22 @@ async function getToken(creds: RollerCreds): Promise<string> {
     }),
     cache: "no-store",
   });
-  const data = (await res.json().catch(() => null)) as Json | null;
+  const raw = await res.text().catch(() => "");
+  let data: Json | null = null;
+  try {
+    data = raw ? (JSON.parse(raw) as Json) : null;
+  } catch {
+    /* keine JSON-Antwort */
+  }
   const token =
     (data?.access_token as string | undefined) ??
     (data?.accessToken as string | undefined) ??
     (data?.token as string | undefined);
   if (!res.ok || !token) {
-    throw new Error(`ROLLER-Authentifizierung fehlgeschlagen (HTTP ${res.status}).`);
+    // Echte Fehlermeldung von ROLLER mitgeben (z. B. invalid_client).
+    throw new Error(
+      `ROLLER-Authentifizierung fehlgeschlagen (HTTP ${res.status}): ${raw.slice(0, 300) || "(keine Antwort)"}`,
+    );
   }
   const expiresIn = typeof data?.expires_in === "number" ? data.expires_in : 3600;
   tokenCache.set(creds.clientId, {
