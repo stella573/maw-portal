@@ -93,18 +93,21 @@ export async function syncFromPersonio(): Promise<SyncResult> {
   const resolveLocation = (office: string | null): string | null =>
     office ? locationByKey.get(office.trim().toLowerCase()) ?? null : null;
 
-  // E-Mail → profile_id (für Verknüpfung + Status-Spiegelung).
+  // E-Mail → Profil (für Verknüpfung, Status-Spiegelung, Namens-Backfill).
   const emails = employees.map((e) => e.email).filter((e): e is string => !!e);
-  const profileByEmail = new Map<string, string>();
+  const profileByEmail = new Map<string, { id: string; fullName: string | null }>();
   if (emails.length > 0) {
     const { data: profiles } = await admin
       .from("profiles")
-      .select("id, email")
+      .select("id, email, full_name")
       .in("email", emails);
     for (const p of profiles ?? []) {
-      if (p.email) profileByEmail.set(p.email.toLowerCase(), p.id);
+      if (p.email) profileByEmail.set(p.email.toLowerCase(), { id: p.id, fullName: p.full_name });
     }
   }
+
+  // Namens-Backfill: Profile ohne full_name aus Personio befüllen.
+  const nameUpdates: { id: string; full_name: string }[] = [];
 
   let active = 0;
   let inactive = 0;
@@ -116,11 +119,17 @@ export async function syncFromPersonio(): Promise<SyncResult> {
     const isActive = e.status === "active";
     if (isActive) active += 1;
     else inactive += 1;
-    const profileId = e.email ? profileByEmail.get(e.email.toLowerCase()) ?? null : null;
-    if (profileId) {
+    const linkedProfile = e.email ? profileByEmail.get(e.email.toLowerCase()) ?? null : null;
+    const profileId = linkedProfile?.id ?? null;
+    if (linkedProfile) {
       linked += 1;
-      if (isActive) toReactivate.push(profileId);
-      else toDeactivate.push(profileId);
+      if (isActive) toReactivate.push(linkedProfile.id);
+      else toDeactivate.push(linkedProfile.id);
+      // Namen nachtragen, wenn im Profil noch keiner steht.
+      const personioName = [e.firstName, e.lastName].filter(Boolean).join(" ").trim();
+      if (!linkedProfile.fullName?.trim() && personioName) {
+        nameUpdates.push({ id: linkedProfile.id, full_name: personioName });
+      }
     }
     return {
       personio_id: e.personioId,
@@ -142,6 +151,11 @@ export async function syncFromPersonio(): Promise<SyncResult> {
       .from("personio_employees")
       .upsert(rows, { onConflict: "personio_id" });
     if (error) throw new Error(`Verzeichnis-Upsert fehlgeschlagen: ${error.message}`);
+  }
+
+  // Fehlende Profilnamen aus Personio nachtragen.
+  for (const u of nameUpdates) {
+    await admin.from("profiles").update({ full_name: u.full_name }).eq("id", u.id);
   }
 
   // Status auf Portal-Konten spiegeln: inaktiv ⇒ sperren, aktiv ⇒ entsperren.

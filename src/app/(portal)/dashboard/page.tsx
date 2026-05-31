@@ -23,6 +23,13 @@ function greeting(): string {
   return "Späte Schicht";
 }
 
+/** Macht aus „stella@…" einen freundlichen Namen („Stella"). */
+function prettifyEmailName(email: string): string {
+  const local = email.split("@")[0] ?? email;
+  const first = local.split(/[._-]/)[0] || local;
+  return first.charAt(0).toUpperCase() + first.slice(1);
+}
+
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   if (!user) return null;
@@ -32,13 +39,20 @@ export default async function DashboardPage() {
     supabase.from("profiles").select("avatar_url").eq("id", user.profileId).maybeSingle(),
     supabase
       .from("personio_employees")
-      .select("position")
+      .select("position, first_name, last_name")
       .eq("profile_id", user.profileId)
       .maybeSingle(),
     getDashboardStats(user.profileId),
   ]);
 
-  const firstName = (user.fullName ?? user.email).split(" ")[0];
+  // Anzeigename: Profilname → Personio-Name → hübsch aus der E-Mail.
+  const personioName = [personio?.first_name, personio?.last_name]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  const displayName =
+    user.fullName?.trim() || personioName || prettifyEmailName(user.email);
+  const firstName = displayName.split(" ")[0];
   const hasTicketAccess = stats.perMailbox.length > 0 || stats.assignedToMe > 0;
 
   // Schnellzugriff auf freigeschaltete Module (ohne Dashboard selbst).
@@ -69,7 +83,7 @@ export default async function DashboardPage() {
       {/* Profil + Online-Kolleg:innen */}
       <div className="grid gap-4 lg:grid-cols-3">
         <ProfileCard
-          name={user.fullName ?? user.email}
+          name={displayName}
           email={user.email}
           position={personio?.position ?? null}
           initialAvatarUrl={profile?.avatar_url ?? null}
