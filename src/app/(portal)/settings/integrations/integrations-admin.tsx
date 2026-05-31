@@ -128,11 +128,11 @@ function RollerCard({ conn }: { conn: RollerConnectionStatus }) {
             name="baseUrl"
             defaultValue={conn.baseUrl}
             className="mt-1 w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 font-mono text-xs outline-none focus:border-brand-500"
-            placeholder="https://api.play.roller.app"
+            placeholder="https://api.roller.app"
           />
           <p className="mt-1 text-[11px] text-[var(--muted)]">
-            Standard: https://api.play.roller.app – nur ändern, wenn ROLLER eine
-            andere Umgebung/Region vorgibt.
+            Produktion: https://api.roller.app · Playground/Sandbox:
+            https://api.play.roller.app
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:col-span-2">
