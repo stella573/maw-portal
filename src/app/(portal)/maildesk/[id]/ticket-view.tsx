@@ -170,9 +170,21 @@ function QuickCloseButton({ ticket }: { ticket: TicketDetail }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
-  function setStatus(status: TicketStatus) {
+  function resolve() {
     startTransition(async () => {
-      await setTicketStatus(ticket.id, status);
+      await setTicketStatus(ticket.id, "resolved");
+      // Zurück in die Inbox des Postfachs zu den restlichen offenen Vorgängen
+      // (Standardansicht „Aktiv" blendet das erledigte Ticket aus).
+      const params = new URLSearchParams();
+      if (ticket.mailboxId) params.set("mailbox", ticket.mailboxId);
+      router.push(`/maildesk?${params.toString()}`);
+      router.refresh();
+    });
+  }
+
+  function reopen() {
+    startTransition(async () => {
+      await setTicketStatus(ticket.id, "open");
       router.refresh();
     });
   }
@@ -181,7 +193,7 @@ function QuickCloseButton({ ticket }: { ticket: TicketDetail }) {
     return (
       <button
         type="button"
-        onClick={() => setStatus("open")}
+        onClick={reopen}
         disabled={pending}
         className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-sm transition hover:bg-[var(--background)] disabled:opacity-60"
       >
@@ -193,7 +205,7 @@ function QuickCloseButton({ ticket }: { ticket: TicketDetail }) {
   return (
     <button
       type="button"
-      onClick={() => setStatus("resolved")}
+      onClick={resolve}
       disabled={pending}
       className="flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-60"
     >
