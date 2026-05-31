@@ -21,9 +21,9 @@ import type { Json } from "@/types/database";
  *
  * Zuordnung:
  *  1. Empfänger-Adresse (to) → Postfach mit gleicher email
- *  2. Ticket-Referenz im Betreff (Re: … MAW-XXXX) → bestehendes Ticket
- *  3. sonst offenes Ticket desselben Kunden im selben Postfach
- *  4. sonst neues Ticket
+ *  2. Ticket-Referenz im Betreff (Re: … [MAW-XXXX]) → bestehendes Ticket
+ *     (= echte Antwort des Kunden)
+ *  3. sonst IMMER neues Ticket (neue Mail = neuer Vorgang)
  */
 
 export const runtime = "nodejs";
@@ -191,8 +191,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Kunde konnte nicht angelegt werden" }, { status: 500 });
   }
 
-  // 2) Threading: Ticket-Referenz im Betreff?
+  // 2) Threading NUR über die Ticket-Referenz im Betreff (Re: … [MAW-XXXX]).
+  //    Jede ausgehende Antwort trägt diese Referenz – echte Kundenantworten
+  //    landen damit im richtigen Ticket. Eine NEUE Mail (ohne Referenz) bekommt
+  //    bewusst IMMER ein neues Ticket, auch wenn vom selben Kunden bereits ein
+  //    offenes Ticket existiert (frühere „gleicher Kunde"-Heuristik führte dazu,
+  //    dass unzusammenhängende Anfragen im alten Ticket verschmolzen).
   let ticketId: string | undefined;
+  let matchedByReference = false;
   const reference = extractTicketReference(subject);
   if (reference) {
     const { data: byRef } = await supabase
@@ -201,24 +207,13 @@ export async function POST(request: NextRequest) {
       .eq("reference", reference)
       .eq("mailbox_id", mailboxId)
       .maybeSingle();
-    if (byRef) ticketId = byRef.id;
+    if (byRef) {
+      ticketId = byRef.id;
+      matchedByReference = true;
+    }
   }
 
-  // 3) sonst offenes Ticket desselben Kunden im selben Postfach.
-  if (!ticketId) {
-    const { data: existing } = await supabase
-      .from("tickets")
-      .select("id")
-      .eq("customer_id", customer.id)
-      .eq("mailbox_id", mailboxId)
-      .in("status", ["open", "pending"])
-      .order("last_message_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (existing) ticketId = existing.id;
-  }
-
-  // 4) sonst neues Ticket.
+  // 3) sonst neues Ticket.
   if (!ticketId) {
     const { data: ticket, error: ticketErr } = await supabase
       .from("tickets")
@@ -236,9 +231,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Ticket konnte nicht angelegt werden" }, { status: 500 });
     }
     ticketId = ticket.id;
-  } else {
-    // Wiedereröffnen, falls die Antwort zu einem erledigten Ticket kam.
-    await supabase.from("tickets").update({ status: "open" }).eq("id", ticketId).eq("status", "resolved");
+  } else if (matchedByReference) {
+    // Echte Antwort (Referenz erkannt): erledigtes Ticket wieder öffnen, sonst
+    // auf „offen" zurücksetzen, damit es im aktiven Postfach wieder auftaucht.
+    await supabase
+      .from("tickets")
+      .update({ status: "open" })
+      .eq("id", ticketId)
+      .eq("status", "resolved");
   }
 
   // 5) Eingehende Nachricht anhängen (Trigger pflegt last_message_at).

@@ -37,7 +37,10 @@ export interface InboxTicket {
 
 export interface TicketFilters {
   mailboxId?: string;
+  /** Einzelner Status (z. B. nur „resolved"). */
   status?: TicketStatus;
+  /** Mehrere Status (z. B. Aktiv-Tab = ["open","pending"]). Hat Vorrang vor status. */
+  statuses?: TicketStatus[];
   priority?: TicketPriority;
   search?: string;
 }
@@ -95,7 +98,11 @@ export async function listTickets(
     .limit(200);
 
   if (filters.mailboxId) query = query.eq("mailbox_id", filters.mailboxId);
-  if (filters.status) query = query.eq("status", filters.status);
+  if (filters.statuses && filters.statuses.length > 0) {
+    query = query.in("status", filters.statuses);
+  } else if (filters.status) {
+    query = query.eq("status", filters.status);
+  }
   if (filters.priority) query = query.eq("priority", filters.priority);
   if (filters.search && filters.search.trim()) {
     // einfache Betreff-Suche (ILIKE); FTS-Ausbau später

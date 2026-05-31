@@ -20,5 +20,15 @@ export default async function TicketPage({
   ]);
   if (!ticket) notFound();
 
-  return <TicketView ticket={ticket} showDiagnostics={isOwnerOrAdmin(ctx)} />;
+  const currentUser = ctx
+    ? { profileId: ctx.profileId, name: ctx.fullName ?? ctx.email }
+    : null;
+
+  return (
+    <TicketView
+      ticket={ticket}
+      showDiagnostics={isOwnerOrAdmin(ctx)}
+      currentUser={currentUser}
+    />
+  );
 }

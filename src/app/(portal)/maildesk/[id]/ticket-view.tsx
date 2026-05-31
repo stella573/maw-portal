@@ -1,13 +1,19 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
-import { ArrowLeft, StickyNote, Paperclip } from "lucide-react";
+import { useActionState, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, StickyNote, Paperclip, Check, RotateCcw, Eye, PenLine } from "lucide-react";
 import Link from "next/link";
 import { updateTicket, addNote, assignTicket } from "./actions";
+import { setTicketStatus } from "../actions";
 import {
   TICKET_STATUS_LABELS,
   TICKET_PRIORITY_LABELS,
 } from "@/modules/maildesk/types";
+import {
+  useMaildeskPresence,
+  useRealtimeRefresh,
+} from "@/modules/maildesk/realtime";
 import type { TicketStatus, TicketPriority } from "@/types/database";
 import type {
   TicketDetail,
@@ -18,10 +24,26 @@ import { ReplyEditor } from "./reply-editor";
 export function TicketView({
   ticket,
   showDiagnostics = false,
+  currentUser,
 }: {
   ticket: TicketDetail;
   showDiagnostics?: boolean;
+  currentUser: { profileId: string; name: string } | null;
 }) {
+  // Live: Status-/Zuweisungs-Änderungen und neue Nachrichten sofort spiegeln.
+  useRealtimeRefresh([
+    { table: "tickets", filter: `id=eq.${ticket.id}` },
+    { table: "messages", filter: `ticket_id=eq.${ticket.id}` },
+    { table: "notes", filter: `ticket_id=eq.${ticket.id}` },
+  ]);
+
+  // Presence: wer schaut/tippt gerade an diesem Ticket?
+  const { peers, setTyping } = useMaildeskPresence(
+    currentUser ?? { profileId: "anon", name: "—" },
+    ticket.id,
+  );
+  const here = peers.filter((p) => p.ticketId === ticket.id);
+
   return (
     <div>
       <Link
@@ -31,15 +53,23 @@ export function TicketView({
         <ArrowLeft className="h-4 w-4" /> Zurück zur Inbox
       </Link>
 
+      {/* Hinweis: weitere Bearbeiter im selben Ticket (Doppelbearbeitung vermeiden) */}
+      {here.length > 0 && <PresenceBanner peers={here} />}
+
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Hauptspalte: Verlauf */}
         <div className="space-y-4 lg:col-span-2">
           <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
-            <h1 className="text-lg font-semibold">{ticket.subject}</h1>
-            <p className="mt-1 text-xs text-[var(--muted)]">
-              {ticket.reference}
-              {ticket.mailboxName ? ` · ${ticket.mailboxName}` : ""}
-            </p>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h1 className="text-lg font-semibold">{ticket.subject}</h1>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  {ticket.reference}
+                  {ticket.mailboxName ? ` · ${ticket.mailboxName}` : ""}
+                </p>
+              </div>
+              <QuickCloseButton ticket={ticket} />
+            </div>
           </div>
 
           <div className="space-y-3">
@@ -90,6 +120,7 @@ export function TicketView({
           <ReplyEditor
             ticketId={ticket.id}
             hasCustomer={!!ticket.customerEmail}
+            onTypingChange={setTyping}
           />
         </div>
 
@@ -101,6 +132,73 @@ export function TicketView({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Banner mit weiteren Bearbeitern, die dasselbe Ticket offen haben. */
+function PresenceBanner({
+  peers,
+}: {
+  peers: { profileId: string; name: string; typing: boolean }[];
+}) {
+  const typist = peers.find((p) => p.typing);
+  return (
+    <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2.5 text-sm text-amber-700 dark:text-amber-300">
+      {typist ? <PenLine className="h-4 w-4 shrink-0" /> : <Eye className="h-4 w-4 shrink-0" />}
+      <span>
+        {typist ? (
+          <>
+            <strong>{typist.name}</strong> tippt gerade eine Antwort…
+          </>
+        ) : peers.length === 1 ? (
+          <>
+            <strong>{peers[0]?.name}</strong> sieht dieses Ticket gerade ebenfalls.
+          </>
+        ) : (
+          <>
+            <strong>{peers.length} Bearbeiter</strong> sind gerade in diesem
+            Ticket: {peers.map((p) => p.name).join(", ")}.
+          </>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/** 1-Klick „Erledigt" / „Wieder öffnen" direkt im Ticketkopf. */
+function QuickCloseButton({ ticket }: { ticket: TicketDetail }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  function setStatus(status: TicketStatus) {
+    startTransition(async () => {
+      await setTicketStatus(ticket.id, status);
+      router.refresh();
+    });
+  }
+
+  if (ticket.status === "resolved") {
+    return (
+      <button
+        type="button"
+        onClick={() => setStatus("open")}
+        disabled={pending}
+        className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-2 text-sm transition hover:bg-[var(--background)] disabled:opacity-60"
+      >
+        <RotateCcw className="h-4 w-4" /> {pending ? "…" : "Wieder öffnen"}
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => setStatus("resolved")}
+      disabled={pending}
+      className="flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-60"
+    >
+      <Check className="h-4 w-4" /> {pending ? "…" : "Erledigt"}
+    </button>
   );
 }
 

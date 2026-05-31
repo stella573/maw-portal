@@ -5,11 +5,57 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/services/auth/current-user";
 import { logAudit } from "@/lib/audit/log";
+import type { TicketStatus } from "@/types/database";
 
 export interface ActionResult {
   ok: boolean;
   message: string;
   ticketId?: string;
+}
+
+/**
+ * Status eines Tickets mit einem Klick setzen (z. B. „Erledigt" direkt aus der
+ * Inbox-Liste). Bewusst schlank gehalten – kein Formular, nur ticketId+status.
+ * RLS sorgt dafür, dass nur berechtigte Bearbeiter ändern dürfen.
+ */
+const statusSchema = z.object({
+  ticketId: z.string().uuid(),
+  status: z.enum(["open", "pending", "resolved"]),
+});
+
+export async function setTicketStatus(
+  ticketId: string,
+  status: TicketStatus,
+): Promise<ActionResult> {
+  try {
+    const ctx = await getCurrentUser();
+    if (!ctx) return { ok: false, message: "Nicht authentifiziert." };
+
+    const parsed = statusSchema.safeParse({ ticketId, status });
+    if (!parsed.success) return { ok: false, message: "Ungültige Eingabe." };
+
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("tickets")
+      .update({ status: parsed.data.status })
+      .eq("id", parsed.data.ticketId);
+    if (error) {
+      return {
+        ok: false,
+        message: /policy|permission|row-level/i.test(error.message)
+          ? "Keine Berechtigung."
+          : error.message,
+      };
+    }
+
+    // Statuswechsel wird zusätzlich per DB-Trigger auditiert.
+    revalidatePath("/maildesk");
+    revalidatePath(`/maildesk/${parsed.data.ticketId}`);
+    return { ok: true, message: "Status aktualisiert." };
+  } catch (err) {
+    console.error("[maildesk.setTicketStatus]", err);
+    return { ok: false, message: "Unerwarteter Fehler." };
+  }
 }
 
 /**

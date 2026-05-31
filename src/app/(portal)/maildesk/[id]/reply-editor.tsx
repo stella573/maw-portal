@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, Send, Paperclip, X } from "lucide-react";
 
@@ -14,13 +14,19 @@ interface PendingAttachment {
  * Antwort-Editor: Textfeld + KI-Vorschlag (Claude) + Versand über Resend.
  * KI erzeugt nur einen Entwurf im Feld – gesendet wird ausschließlich per
  * bewusstem Klick auf "Senden".
+ *
+ * onTypingChange meldet dem Presence-Channel, dass hier gerade getippt wird
+ * (für die Live-Anzeige bei anderen Bearbeitern). Wird nach kurzer Inaktivität
+ * automatisch zurückgesetzt.
  */
 export function ReplyEditor({
   ticketId,
   hasCustomer,
+  onTypingChange,
 }: {
   ticketId: string;
   hasCustomer: boolean;
+  onTypingChange?: (typing: boolean) => void;
 }) {
   const router = useRouter();
   const [body, setBody] = useState("");
@@ -31,6 +37,22 @@ export function ReplyEditor({
   const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Tipp-Status melden und nach 2,5 s Inaktivität wieder zurücknehmen.
+  function signalTyping() {
+    onTypingChange?.(true);
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    typingTimer.current = setTimeout(() => onTypingChange?.(false), 2500);
+  }
+
+  // Beim Verlassen der Komponente Tipp-Status sicher zurücksetzen.
+  useEffect(() => {
+    return () => {
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+      onTypingChange?.(false);
+    };
+  }, [onTypingChange]);
 
   async function handleUpload(files: FileList | null) {
     if (!files || files.length === 0) return;
@@ -110,6 +132,7 @@ export function ReplyEditor({
         setBody("");
         setAttachments([]);
         setInfo("Antwort gesendet.");
+        onTypingChange?.(false);
         router.refresh();
       }
     } catch {
@@ -144,7 +167,11 @@ export function ReplyEditor({
 
       <textarea
         value={body}
-        onChange={(e) => setBody(e.target.value)}
+        onChange={(e) => {
+          setBody(e.target.value);
+          signalTyping();
+        }}
+        onBlur={() => onTypingChange?.(false)}
         rows={6}
         placeholder="Antwort an den Kunden…"
         className="w-full resize-y rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-brand-500"

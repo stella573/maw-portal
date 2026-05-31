@@ -1,20 +1,32 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Inbox as InboxIcon } from "lucide-react";
-import { createTicket, type ActionResult } from "./actions";
+import { Plus, Search, Inbox as InboxIcon, Check, RotateCcw, Eye, PenLine } from "lucide-react";
+import { createTicket, setTicketStatus, type ActionResult } from "./actions";
 import type {
   InboxMailbox,
   InboxTicket,
-  TicketFilters,
 } from "@/modules/maildesk/services/tickets";
 import {
   TICKET_STATUS_LABELS,
   TICKET_PRIORITY_LABELS,
 } from "@/modules/maildesk/types";
+import {
+  useMaildeskPresence,
+  useRealtimeRefresh,
+  type PresencePeer,
+} from "@/modules/maildesk/realtime";
 import type { TicketStatus, TicketPriority } from "@/types/database";
+
+export type InboxView = "active" | "resolved" | "all";
+
+const VIEW_LABELS: Record<InboxView, string> = {
+  active: "Aktiv",
+  resolved: "Erledigt",
+  all: "Alle",
+};
 
 const STATUS_STYLES: Record<TicketStatus, string> = {
   open: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
@@ -32,22 +44,55 @@ const PRIORITY_STYLES: Record<TicketPriority, string> = {
 interface Props {
   mailboxes: InboxMailbox[];
   tickets: InboxTicket[];
-  filters: TicketFilters;
+  mailboxId?: string;
+  view: InboxView;
+  priority?: TicketPriority;
+  search?: string;
   canCreate: boolean;
+  currentUser: { profileId: string; name: string } | null;
 }
 
-export function Inbox({ mailboxes, tickets, filters, canCreate }: Props) {
+export function Inbox({
+  mailboxes,
+  tickets,
+  mailboxId,
+  view,
+  priority,
+  search,
+  canCreate,
+  currentUser,
+}: Props) {
   const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
+
+  // Live: Ticket-Änderungen (Status, Zuweisung, neue Vorgänge) sofort spiegeln.
+  // RLS filtert serverseitig – wir laden bei einem Event einfach neu.
+  useRealtimeRefresh([{ table: "tickets" }]);
+
+  // Presence: wer ist gerade wo? (für „bereits in Bearbeitung"-Hinweis)
+  const { peers } = useMaildeskPresence(
+    currentUser ?? { profileId: "anon", name: "—" },
+    null,
+  );
+  const peersByTicket = useMemo(() => {
+    const map = new Map<string, PresencePeer[]>();
+    for (const p of peers) {
+      if (!p.ticketId) continue;
+      const list = map.get(p.ticketId) ?? [];
+      list.push(p);
+      map.set(p.ticketId, list);
+    }
+    return map;
+  }, [peers]);
 
   // Filter über URL-Query steuern (server-seitiges Neuladen).
   function updateQuery(patch: Record<string, string | undefined>) {
     const params = new URLSearchParams();
-    const merged = {
-      mailbox: filters.mailboxId,
-      status: filters.status,
-      priority: filters.priority,
-      q: filters.search,
+    const merged: Record<string, string | undefined> = {
+      mailbox: mailboxId,
+      view,
+      priority,
+      q: search,
       ...patch,
     };
     for (const [k, v] of Object.entries(merged)) {
@@ -74,7 +119,7 @@ export function Inbox({ mailboxes, tickets, filters, canCreate }: Props) {
       {/* Postfach-Umschalter */}
       <div className="flex flex-wrap gap-2">
         {mailboxes.map((mb) => {
-          const active = filters.mailboxId === mb.id;
+          const active = mailboxId === mb.id;
           return (
             <button
               key={mb.id}
@@ -97,12 +142,31 @@ export function Inbox({ mailboxes, tickets, filters, canCreate }: Props) {
         })}
       </div>
 
+      {/* Status-Tabs */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-lg border border-[var(--border)] p-0.5">
+          {(Object.keys(VIEW_LABELS) as InboxView[]).map((v) => (
+            <button
+              key={v}
+              onClick={() => updateQuery({ view: v })}
+              className={`rounded-md px-3 py-1.5 text-sm transition ${
+                view === v
+                  ? "bg-brand-600 text-white"
+                  : "text-[var(--muted)] hover:bg-[var(--background)]"
+              }`}
+            >
+              {VIEW_LABELS[v]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Filterleiste */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[12rem]">
           <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--muted)]" />
           <input
-            defaultValue={filters.search ?? ""}
+            defaultValue={search ?? ""}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 updateQuery({ q: (e.target as HTMLInputElement).value || undefined });
@@ -113,19 +177,7 @@ export function Inbox({ mailboxes, tickets, filters, canCreate }: Props) {
           />
         </div>
         <select
-          value={filters.status ?? ""}
-          onChange={(e) => updateQuery({ status: e.target.value || undefined })}
-          className="rounded-lg border border-[var(--border)] bg-transparent px-2 py-2 text-sm outline-none focus:border-brand-500"
-        >
-          <option value="">Alle Status</option>
-          {(Object.keys(TICKET_STATUS_LABELS) as TicketStatus[]).map((s) => (
-            <option key={s} value={s}>
-              {TICKET_STATUS_LABELS[s]}
-            </option>
-          ))}
-        </select>
-        <select
-          value={filters.priority ?? ""}
+          value={priority ?? ""}
           onChange={(e) => updateQuery({ priority: e.target.value || undefined })}
           className="rounded-lg border border-[var(--border)] bg-transparent px-2 py-2 text-sm outline-none focus:border-brand-500"
         >
@@ -148,18 +200,24 @@ export function Inbox({ mailboxes, tickets, filters, canCreate }: Props) {
 
       {showCreate && canCreate && (
         <CreateTicketForm
-          mailboxId={filters.mailboxId ?? mailboxes[0]?.id ?? ""}
+          mailboxId={mailboxId ?? mailboxes[0]?.id ?? ""}
           onDone={() => setShowCreate(false)}
         />
       )}
 
       {/* Ticketliste */}
-      <TicketList tickets={tickets} />
+      <TicketList tickets={tickets} peersByTicket={peersByTicket} />
     </div>
   );
 }
 
-function TicketList({ tickets }: { tickets: InboxTicket[] }) {
+function TicketList({
+  tickets,
+  peersByTicket,
+}: {
+  tickets: InboxTicket[];
+  peersByTicket: Map<string, PresencePeer[]>;
+}) {
   if (tickets.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-10 text-center text-sm text-[var(--muted)]">
@@ -172,61 +230,135 @@ function TicketList({ tickets }: { tickets: InboxTicket[] }) {
     <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--surface)]">
       <ul className="divide-y divide-[var(--border)]">
         {tickets.map((t) => (
-          <li key={t.id}>
-            <Link
-              href={`/maildesk/${t.id}`}
-              className={`flex items-start gap-3 px-4 py-3 transition hover:bg-[var(--background)] ${
-                t.needsReply ? "bg-brand-50/40 dark:bg-brand-700/10" : ""
-              }`}
-            >
-              {/* Unbeantwortet-Punkt */}
-              <span className="mt-1.5 shrink-0">
-                {t.needsReply ? (
-                  <span
-                    className="block h-2 w-2 rounded-full bg-brand-600"
-                    aria-label="Unbeantwortet"
-                    title="Unbeantwortet"
-                  />
-                ) : (
-                  <span className="block h-2 w-2" />
-                )}
-              </span>
-              <span
-                className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[t.status]}`}
-              >
-                {TICKET_STATUS_LABELS[t.status]}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`truncate ${t.needsReply ? "font-semibold" : "font-medium"}`}
-                  >
-                    {t.subject}
-                  </span>
-                  <span className={`shrink-0 text-xs ${PRIORITY_STYLES[t.priority]}`}>
-                    ● {TICKET_PRIORITY_LABELS[t.priority]}
-                  </span>
-                </div>
-                {t.preview && (
-                  <div className="truncate text-xs text-[var(--foreground)]/70">
-                    {t.preview}
-                  </div>
-                )}
-                <div className="truncate text-xs text-[var(--muted)]">
-                  {t.reference}
-                  {t.customerName || t.customerEmail
-                    ? ` · ${t.customerName ?? t.customerEmail}`
-                    : ""}
-                </div>
-              </div>
-              <span className="hidden shrink-0 text-xs text-[var(--muted)] sm:block">
-                {formatDate(t.lastMessageAt ?? t.createdAt)}
-              </span>
-            </Link>
-          </li>
+          <TicketRow
+            key={t.id}
+            ticket={t}
+            peers={peersByTicket.get(t.id) ?? []}
+          />
         ))}
       </ul>
     </div>
+  );
+}
+
+function TicketRow({
+  ticket: t,
+  peers,
+}: {
+  ticket: InboxTicket;
+  peers: PresencePeer[];
+}) {
+  const [pending, startTransition] = useTransition();
+  const typing = peers.some((p) => p.typing);
+
+  function quickStatus(status: TicketStatus) {
+    startTransition(async () => {
+      await setTicketStatus(t.id, status);
+    });
+  }
+
+  return (
+    <li className="group relative flex items-stretch">
+      <Link
+        href={`/maildesk/${t.id}`}
+        className={`flex min-w-0 flex-1 items-start gap-3 px-4 py-3 transition hover:bg-[var(--background)] ${
+          t.needsReply ? "bg-brand-50/40 dark:bg-brand-700/10" : ""
+        } ${pending ? "opacity-50" : ""}`}
+      >
+        {/* Unbeantwortet-Punkt */}
+        <span className="mt-1.5 shrink-0">
+          {t.needsReply ? (
+            <span
+              className="block h-2 w-2 rounded-full bg-brand-600"
+              aria-label="Unbeantwortet"
+              title="Unbeantwortet"
+            />
+          ) : (
+            <span className="block h-2 w-2" />
+          )}
+        </span>
+        <span
+          className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[t.status]}`}
+        >
+          {TICKET_STATUS_LABELS[t.status]}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span
+              className={`truncate ${t.needsReply ? "font-semibold" : "font-medium"}`}
+            >
+              {t.subject}
+            </span>
+            <span className={`shrink-0 text-xs ${PRIORITY_STYLES[t.priority]}`}>
+              ● {TICKET_PRIORITY_LABELS[t.priority]}
+            </span>
+          </div>
+          {t.preview && (
+            <div className="truncate text-xs text-[var(--foreground)]/70">
+              {t.preview}
+            </div>
+          )}
+          <div className="flex items-center gap-2 truncate text-xs text-[var(--muted)]">
+            <span className="truncate">
+              {t.reference}
+              {t.customerName || t.customerEmail
+                ? ` · ${t.customerName ?? t.customerEmail}`
+                : ""}
+            </span>
+            {/* Presence: wer ist gerade in diesem Ticket? */}
+            {peers.length > 0 && (
+              <span
+                className={`inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium ${
+                  typing
+                    ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                    : "bg-brand-500/15 text-brand-600 dark:text-brand-300"
+                }`}
+                title={peers.map((p) => p.name).join(", ")}
+              >
+                {typing ? (
+                  <PenLine className="h-3 w-3" />
+                ) : (
+                  <Eye className="h-3 w-3" />
+                )}
+                {typing
+                  ? `${peers.find((p) => p.typing)?.name ?? "Jemand"} tippt…`
+                  : peers.length === 1
+                    ? `${peers[0]?.name} ist hier`
+                    : `${peers.length} Bearbeiter`}
+              </span>
+            )}
+          </div>
+        </div>
+        <span className="hidden shrink-0 text-xs text-[var(--muted)] sm:block">
+          {formatDate(t.lastMessageAt ?? t.createdAt)}
+        </span>
+      </Link>
+
+      {/* Schnellaktion: erledigen / wieder öffnen */}
+      <div className="flex shrink-0 items-center pr-3">
+        {t.status === "resolved" ? (
+          <button
+            type="button"
+            onClick={() => quickStatus("open")}
+            disabled={pending}
+            title="Wieder öffnen"
+            className="flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs text-[var(--muted)] opacity-0 transition hover:bg-[var(--background)] hover:text-[var(--foreground)] focus:opacity-100 group-hover:opacity-100 disabled:opacity-60"
+          >
+            <RotateCcw className="h-3.5 w-3.5" /> Öffnen
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => quickStatus("resolved")}
+            disabled={pending}
+            title="Als erledigt markieren"
+            className="flex items-center gap-1 rounded-lg border border-emerald-500/40 px-2.5 py-1.5 text-xs text-emerald-600 opacity-0 transition hover:bg-emerald-500/10 focus:opacity-100 group-hover:opacity-100 disabled:opacity-60 dark:text-emerald-400"
+          >
+            <Check className="h-3.5 w-3.5" /> Erledigt
+          </button>
+        )}
+      </div>
+    </li>
   );
 }
 
