@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getTicketDetail } from "@/modules/maildesk/services/ticket-detail";
 import { listReplyTemplates } from "@/modules/maildesk/services/templates";
+import { getInboxMailboxes } from "@/modules/maildesk/services/tickets";
 import { getCurrentUser } from "@/services/auth/current-user";
 import { isOwnerOrAdmin } from "@/lib/auth/permissions";
 import { TicketView } from "./ticket-view";
@@ -15,10 +16,11 @@ export default async function TicketPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const [ticket, ctx, templates] = await Promise.all([
+  const [ticket, ctx, templates, mailboxes] = await Promise.all([
     getTicketDetail(id),
     getCurrentUser(),
     listReplyTemplates(),
+    getInboxMailboxes(),
   ]);
   if (!ticket) notFound();
 
@@ -32,6 +34,7 @@ export default async function TicketPage({
       showDiagnostics={isOwnerOrAdmin(ctx)}
       currentUser={currentUser}
       templates={templates}
+      mailboxes={mailboxes.map((m) => ({ id: m.id, name: m.name }))}
     />
   );
 }

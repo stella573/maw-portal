@@ -25,14 +25,22 @@ export function ReplyEditor({
   hasCustomer,
   onTypingChange,
   templates = [],
+  mailboxes = [],
+  defaultMailboxId = null,
 }: {
   ticketId: string;
   hasCustomer: boolean;
   onTypingChange?: (typing: boolean) => void;
   templates?: ReplyTemplate[];
+  mailboxes?: { id: string; name: string }[];
+  defaultMailboxId?: string | null;
 }) {
   const router = useRouter();
   const [body, setBody] = useState("");
+  // Aus welchem Postfach gesendet wird (Standard: Postfach des Tickets).
+  const [mailboxId, setMailboxId] = useState<string>(
+    defaultMailboxId ?? mailboxes[0]?.id ?? "",
+  );
   const [sending, setSending] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [error, setError] = useState("");
@@ -133,6 +141,7 @@ export function ReplyEditor({
           ticketId,
           bodyText: body,
           attachmentIds: attachments.map((a) => a.id),
+          ...(mailboxId ? { mailboxId } : {}),
         }),
       });
       const data = await res.json();
@@ -198,6 +207,25 @@ export function ReplyEditor({
           </button>
         </div>
       </div>
+
+      {mailboxes.length > 0 && (
+        <div className="mb-2 flex items-center gap-2 text-xs">
+          <span className="text-[var(--muted)]">Von</span>
+          <select
+            value={mailboxId}
+            onChange={(e) => setMailboxId(e.target.value)}
+            disabled={sending || mailboxes.length === 1}
+            title="Aus welchem Postfach senden?"
+            className="flex-1 rounded-lg border border-[var(--border)] bg-transparent px-2 py-1.5 outline-none focus:border-brand-500 disabled:opacity-70"
+          >
+            {mailboxes.map((m) => (
+              <option key={m.id} value={m.id}>
+                Mining Adventure World – {m.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <textarea
         value={body}

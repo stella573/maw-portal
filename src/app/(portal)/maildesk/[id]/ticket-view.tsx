@@ -27,11 +27,13 @@ export function TicketView({
   showDiagnostics = false,
   currentUser,
   templates,
+  mailboxes,
 }: {
   ticket: TicketDetail;
   showDiagnostics?: boolean;
   currentUser: { profileId: string; name: string } | null;
   templates: ReplyTemplate[];
+  mailboxes: { id: string; name: string }[];
 }) {
   // Live: Status-/Zuweisungs-Änderungen und neue Nachrichten sofort spiegeln.
   useRealtimeRefresh([
@@ -125,6 +127,8 @@ export function TicketView({
             hasCustomer={!!ticket.customerEmail}
             onTypingChange={setTyping}
             templates={templates}
+            mailboxes={mailboxes}
+            defaultMailboxId={ticket.mailboxId}
           />
         </div>
 

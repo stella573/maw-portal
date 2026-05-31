@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/services/auth/current-user";
 import { can } from "@/lib/auth/permissions";
 import { getResend, getFromEmail } from "@/lib/resend/client";
 import { renderEmailHtml } from "@/lib/resend/email-template";
+import { senderDisplayName } from "@/config/app";
 import { logAudit } from "@/lib/audit/log";
 
 /**
@@ -28,6 +29,8 @@ const bodySchema = z.object({
   ticketId: z.string().uuid(),
   bodyText: z.string().min(1),
   attachmentIds: z.array(z.string().uuid()).max(10).optional(),
+  /** Optional: aus welchem Postfach gesendet wird (sonst Postfach des Tickets). */
+  mailboxId: z.string().uuid().optional(),
 });
 
 /** Stellt sicher, dass die Ticket-Referenz im Betreff steht (Threading). */
@@ -71,10 +74,27 @@ export async function POST(request: NextRequest) {
   }
 
   const customer = ticket.customers as unknown as { email: string } | null;
-  const mailbox = ticket.mailboxes as unknown as {
+  let mailbox = ticket.mailboxes as unknown as {
     name: string;
     email: string;
   } | null;
+
+  // Optional: aus einem anderen (eigenen) Postfach senden. RLS stellt sicher,
+  // dass der User nur Postfächer wählen kann, die er sehen/bedienen darf.
+  if (input.mailboxId) {
+    const { data: chosen } = await supabase
+      .from("mailboxes")
+      .select("name, email, is_active")
+      .eq("id", input.mailboxId)
+      .maybeSingle();
+    if (!chosen || !chosen.is_active) {
+      return NextResponse.json(
+        { error: "Gewähltes Postfach nicht verfügbar" },
+        { status: 422 },
+      );
+    }
+    mailbox = { name: chosen.name, email: chosen.email };
+  }
 
   const to = customer?.email;
   if (!to) {
@@ -84,11 +104,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Absender = Postfach-Adresse (mit Anzeigename), sonst globaler Fallback.
+  // Absender = Marke + Postfachname (z. B. "Mining Adventure World – Dorsten"),
+  // damit Empfänger immer erkennen, von wem die Mail kommt. Fallback global.
   let from: string;
   try {
     from = mailbox?.email
-      ? `${mailbox.name} <${mailbox.email}>`
+      ? `${senderDisplayName(mailbox.name)} <${mailbox.email}>`
       : getFromEmail();
   } catch {
     return NextResponse.json(
