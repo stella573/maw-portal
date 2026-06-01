@@ -91,6 +91,22 @@ export function GetMyInvoicesAdmin({ status }: { status: GmiConnectionStatus }) 
             />
           </div>
           <div className="sm:col-span-2">
+            <label className="block text-xs font-medium text-[var(--muted)]">
+              Account-Kennung
+            </label>
+            <input
+              name="accountId"
+              required
+              defaultValue={status.accountId ?? ""}
+              className="mt-1 w-full rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 font-mono text-sm outline-none focus:border-brand-500"
+              placeholder="G-12345"
+            />
+            <p className="mt-1 text-[11px] text-[var(--muted)]">
+              Format <span className="font-mono">G-{"{Nummer}"}</span> – von der GMI-API
+              im User-Agent verlangt. Findest du in deinem GetMyInvoices-Account.
+            </p>
+          </div>
+          <div className="sm:col-span-2">
             <label className="block text-xs font-medium text-[var(--muted)]">API Base-URL</label>
             <input
               name="baseUrl"

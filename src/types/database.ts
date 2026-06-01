@@ -362,6 +362,7 @@ export type Database = {
           id: boolean;
           base_url: string;
           api_key: string;
+          account_id: string | null;
           is_active: boolean;
           last_verified_at: string | null;
           created_at: string;
@@ -371,6 +372,7 @@ export type Database = {
           id?: boolean;
           base_url?: string;
           api_key: string;
+          account_id?: string | null;
           is_active?: boolean;
           last_verified_at?: string | null;
           created_at?: string;
@@ -380,6 +382,7 @@ export type Database = {
           id?: boolean;
           base_url?: string;
           api_key?: string;
+          account_id?: string | null;
           is_active?: boolean;
           last_verified_at?: string | null;
           created_at?: string;

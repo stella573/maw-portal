@@ -124,6 +124,7 @@ export async function removeRollerConnection(locationId: string): Promise<Action
 const saveGmiSchema = z.object({
   // Beim Bearbeiten optional: leer = bestehenden Key behalten.
   apiKey: z.string().optional(),
+  accountId: z.string().trim().min(1, "Account-Kennung (G-…) ist erforderlich."),
   baseUrl: z.string().trim().optional(),
 });
 
@@ -135,12 +136,13 @@ export async function saveGmiCredentials(
     if (!(await guard())) return { ok: false, message: "Keine Berechtigung." };
     const parsed = saveGmiSchema.safeParse({
       apiKey: formData.get("apiKey") ?? "",
+      accountId: formData.get("accountId") ?? "",
       baseUrl: formData.get("baseUrl") ?? "",
     });
     if (!parsed.success) {
       return { ok: false, message: parsed.error.issues[0]?.message ?? "Ungültige Eingabe." };
     }
-    const { baseUrl } = parsed.data;
+    const { baseUrl, accountId } = parsed.data;
     let apiKey = parsed.data.apiKey?.trim() ?? "";
 
     // Kein neuer Key eingegeben → bestehenden beibehalten.
@@ -157,7 +159,7 @@ export async function saveGmiCredentials(
       apiKey = data.api_key;
     }
 
-    await saveGmiConnection({ apiKey, baseUrl });
+    await saveGmiConnection({ apiKey, accountId, baseUrl });
     await logAudit({
       action: "user.updated",
       entityType: "getmyinvoices_connection",
