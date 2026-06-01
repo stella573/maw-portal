@@ -9,6 +9,7 @@ import {
   fetchReceivedEmail,
   fetchReceivedAttachments,
 } from "@/lib/resend/inbound";
+import { isSupportedAttachment } from "@/lib/ai/invoice-types";
 import type { Json } from "@/types/database";
 
 /**
@@ -303,15 +304,37 @@ export async function POST(request: NextRequest) {
           console.error("[resend-webhook] storage upload:", upErr.message);
           continue;
         }
-        await supabase.from("attachments").insert({
-          message_id: insertedMsg.id,
-          ticket_id: ticketId,
-          storage_path: storagePath,
-          file_name: att.filename.slice(0, 200),
-          content_type: att.contentType,
-          size_bytes: att.content.byteLength,
-          provider_attachment_id: att.id,
-        });
+        const { data: insertedAtt } = await supabase
+          .from("attachments")
+          .insert({
+            message_id: insertedMsg.id,
+            ticket_id: ticketId,
+            storage_path: storagePath,
+            file_name: att.filename.slice(0, 200),
+            content_type: att.contentType,
+            size_bytes: att.content.byteLength,
+            provider_attachment_id: att.id,
+          })
+          .select("id")
+          .single();
+
+        // KI-Rechnungserkennung für unterstützte Dateitypen vormerken. Der
+        // eigentliche (langsame) KI-Aufruf wird hier BEWUSST NICHT abgewartet –
+        // das würde den Webhook verzögern und Resend-Retries (→ Doppel-Tickets)
+        // riskieren. Stattdessen markieren wir den Anhang als "processing"; die
+        // Analyse wird beim ersten Ansehen (Ticket/Dashboard) automatisch
+        // abgeschlossen.
+        if (
+          insertedAtt &&
+          isSupportedAttachment(att.filename, att.contentType)
+        ) {
+          await supabase
+            .from("attachment_ai_analysis")
+            .upsert(
+              { attachment_id: insertedAtt.id, status: "processing" },
+              { onConflict: "attachment_id" },
+            );
+        }
       }
     } catch (err) {
       console.error("[resend-webhook] Anhang-Import:", err);

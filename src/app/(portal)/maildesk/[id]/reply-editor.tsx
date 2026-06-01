@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, Send, Paperclip, X, FileText } from "lucide-react";
 import type { ReplyTemplate } from "@/modules/maildesk/services/templates";
+import { AttachmentAiBadge } from "@/components/attachments/attachment-ai-badge";
 
 interface PendingAttachment {
   id: string;
@@ -239,25 +240,25 @@ export function ReplyEditor({
         className="w-full resize-y rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-brand-500"
       />
 
-      {/* Anhänge */}
+      {/* Anhänge – inkl. automatischer KI-Rechnungserkennung pro Datei */}
       {attachments.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-2 flex flex-col gap-2">
           {attachments.map((a) => (
-            <span
-              key={a.id}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs"
-            >
-              <Paperclip className="h-3 w-3 shrink-0" />
-              <span className="max-w-[180px] truncate">{a.fileName}</span>
-              <button
-                type="button"
-                onClick={() => removeAttachment(a.id)}
-                aria-label="Anhang entfernen"
-                className="text-[var(--muted)] hover:text-red-500"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
+            <div key={a.id} className="flex flex-col gap-1.5">
+              <span className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs">
+                <Paperclip className="h-3 w-3 shrink-0" />
+                <span className="max-w-[180px] truncate">{a.fileName}</span>
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(a.id)}
+                  aria-label="Anhang entfernen"
+                  className="text-[var(--muted)] hover:text-red-500"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+              <AttachmentAiBadge attachmentId={a.id} />
+            </div>
           ))}
         </div>
       )}

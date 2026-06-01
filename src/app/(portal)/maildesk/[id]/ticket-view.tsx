@@ -21,6 +21,7 @@ import type {
 } from "@/modules/maildesk/services/ticket-detail";
 import type { ReplyTemplate } from "@/modules/maildesk/services/templates";
 import { ReplyEditor } from "./reply-editor";
+import { AttachmentAiBadge } from "@/components/attachments/attachment-ai-badge";
 
 export function TicketView({
   ticket,
@@ -506,25 +507,31 @@ function stripHtml(html: string | null): string {
     .trim();
 }
 
-/** Liste der Anhänge einer Nachricht – Download über die berechtigte Route. */
+/**
+ * Liste der Anhänge einer Nachricht – Download über die berechtigte Route.
+ * Zu jedem Anhang zeigt ein KI-Badge an, ob es sich um eine Rechnung handelt
+ * (automatische Erkennung, serverseitig). Re-Analyse über "Erneut prüfen".
+ */
 function AttachmentList({ items }: { items: TicketDetailAttachment[] }) {
   if (items.length === 0) return null;
   return (
-    <div className="mt-3 flex flex-wrap gap-2">
+    <div className="mt-3 flex flex-col gap-2.5">
       {items.map((a) => (
-        <a
-          key={a.id}
-          href={`/api/mail/attachment/${a.id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--surface)]"
-        >
-          <Paperclip className="h-3.5 w-3.5 shrink-0" />
-          <span className="max-w-[200px] truncate">{a.fileName}</span>
-          {a.sizeBytes != null && (
-            <span className="text-[var(--muted)]">{formatBytes(a.sizeBytes)}</span>
-          )}
-        </a>
+        <div key={a.id} className="flex flex-col gap-1.5">
+          <a
+            href={`/api/mail/attachment/${a.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--surface)]"
+          >
+            <Paperclip className="h-3.5 w-3.5 shrink-0" />
+            <span className="max-w-[200px] truncate">{a.fileName}</span>
+            {a.sizeBytes != null && (
+              <span className="text-[var(--muted)]">{formatBytes(a.sizeBytes)}</span>
+            )}
+          </a>
+          <AttachmentAiBadge attachmentId={a.id} initial={a.analysis} />
+        </div>
       ))}
     </div>
   );

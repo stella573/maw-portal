@@ -19,6 +19,15 @@ export type TicketStatus = "open" | "pending" | "resolved";
 export type TicketPriority = "low" | "normal" | "high" | "urgent";
 export type MessageDirection = "inbound" | "outbound";
 export type MessageChannel = "email" | "internal";
+/** Fachliches KI-Urteil zu einem Anhang (siehe attachment_ai_analysis). */
+export type InvoiceClassification =
+  | "invoice"
+  | "not_invoice"
+  | "unclear"
+  | "unsupported_file_type"
+  | "error";
+/** Verarbeitungs-Lebenszyklus einer Anhang-Analyse. */
+export type AttachmentAnalysisStatus = "processing" | "completed" | "error";
 export type AuditAction =
   | "auth.login"
   | "auth.logout"
@@ -650,6 +659,67 @@ export type Database = {
           created_at?: string;
         };
         Relationships: [];
+      };
+      attachment_ai_analysis: {
+        Row: {
+          id: string;
+          attachment_id: string;
+          status: AttachmentAnalysisStatus;
+          is_invoice: boolean;
+          confidence: number;
+          classification: InvoiceClassification;
+          reason: string | null;
+          extracted_invoice_number: string | null;
+          extracted_invoice_date: string | null;
+          extracted_vendor_name: string | null;
+          extracted_total_amount: number | null;
+          extracted_currency: string | null;
+          raw_ai_response: Json | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          attachment_id: string;
+          status?: AttachmentAnalysisStatus;
+          is_invoice?: boolean;
+          confidence?: number;
+          classification?: InvoiceClassification;
+          reason?: string | null;
+          extracted_invoice_number?: string | null;
+          extracted_invoice_date?: string | null;
+          extracted_vendor_name?: string | null;
+          extracted_total_amount?: number | null;
+          extracted_currency?: string | null;
+          raw_ai_response?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          attachment_id?: string;
+          status?: AttachmentAnalysisStatus;
+          is_invoice?: boolean;
+          confidence?: number;
+          classification?: InvoiceClassification;
+          reason?: string | null;
+          extracted_invoice_number?: string | null;
+          extracted_invoice_date?: string | null;
+          extracted_vendor_name?: string | null;
+          extracted_total_amount?: number | null;
+          extracted_currency?: string | null;
+          raw_ai_response?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "attachment_ai_analysis_attachment_id_fkey";
+            columns: ["attachment_id"];
+            referencedRelation: "attachments";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       audit_logs: {
         Row: {

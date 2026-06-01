@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Inbox,
+  ReceiptText,
   Users,
   CalendarDays,
   CheckSquare,
@@ -35,6 +36,7 @@ export interface NavItem {
 export const NAVIGATION: NavItem[] = [
   { key: "dashboard", label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, status: "active" },
   { key: "maildesk", label: "MailDesk", href: "/maildesk", icon: Inbox, status: "active", permission: "tickets.read" },
+  { key: "invoices", label: "Rechnungen", href: "/invoices", icon: ReceiptText, status: "active", permission: "tickets.read" },
   { key: "analytics", label: "Analytics", href: "/analytics", icon: BarChart3, status: "active", permission: "analytics.read" },
   { key: "employees", label: "Mitarbeiter", href: "/employees", icon: Users, status: "active", permission: "employees.read" },
   { key: "schedule", label: "Dienstplan", href: "/schedule", icon: CalendarDays, status: "planned" },
