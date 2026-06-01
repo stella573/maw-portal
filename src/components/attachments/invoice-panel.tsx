@@ -148,7 +148,13 @@ export function InvoicePanel({
     ? "ai_check_started"
     : (job?.status ?? "uploaded");
   const pending = isInProgress(status) || busy === "process";
-  const label = job ? jobLabel({ status, classification: job.classification }) : "Wird geprüft …";
+  const alreadyInGmi =
+    job?.status === "getmyinvoices_upload_completed" && job.alreadyExistedInGmi;
+  const label = !job
+    ? "Wird geprüft …"
+    : alreadyInGmi
+      ? "Bereits in GMI vorhanden"
+      : jobLabel({ status, classification: job.classification });
 
   const ex = job?.extracted ?? null;
   const showInvoiceDetails = job?.isInvoice && ex;

@@ -105,6 +105,7 @@ export function mapJob(row: JobRow, extracted: ExtractedRow | null): InvoiceJob 
     supplierMatchReason: row.supplier_match_reason,
     manualSupplierConfirmed: row.manual_supplier_confirmed,
     getmyinvoicesDocumentId: row.getmyinvoices_document_id,
+    alreadyExistedInGmi: row.getmyinvoices_already_existed,
     modelUsed: row.model_used,
     errorMessage: row.error_message,
     createdAt: row.created_at,
@@ -599,6 +600,7 @@ async function doUpload(
     await patchJob(admin, attachmentId, {
       status: "getmyinvoices_upload_completed",
       getmyinvoices_document_id: res.documentId,
+      getmyinvoices_already_existed: res.alreadyExists === true,
       raw_getmyinvoices_response: (res.raw ?? null) as Json,
       error_message: null,
     });

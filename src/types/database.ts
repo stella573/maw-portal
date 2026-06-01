@@ -691,6 +691,7 @@ export type Database = {
           supplier_match_reason: string | null;
           manual_supplier_confirmed: boolean;
           getmyinvoices_document_id: string | null;
+          getmyinvoices_already_existed: boolean;
           model_used: string | null;
           error_message: string | null;
           raw_claude_response: Json | null;
@@ -712,6 +713,7 @@ export type Database = {
           supplier_match_reason?: string | null;
           manual_supplier_confirmed?: boolean;
           getmyinvoices_document_id?: string | null;
+          getmyinvoices_already_existed?: boolean;
           model_used?: string | null;
           error_message?: string | null;
           raw_claude_response?: Json | null;
@@ -733,6 +735,7 @@ export type Database = {
           supplier_match_reason?: string | null;
           manual_supplier_confirmed?: boolean;
           getmyinvoices_document_id?: string | null;
+          getmyinvoices_already_existed?: boolean;
           model_used?: string | null;
           error_message?: string | null;
           raw_claude_response?: Json | null;

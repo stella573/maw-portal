@@ -61,6 +61,8 @@ export interface InvoiceJob {
   supplierMatchReason: string | null;
   manualSupplierConfirmed: boolean;
   getmyinvoicesDocumentId: string | null;
+  /** Dokument war bei GetMyInvoices bereits vorhanden (Duplikat). */
+  alreadyExistedInGmi: boolean;
   modelUsed: string | null;
   errorMessage: string | null;
   createdAt: string;
