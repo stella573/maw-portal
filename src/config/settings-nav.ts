@@ -85,6 +85,6 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     href: "/settings/integrations",
     icon: Plug,
     permission: "integrations.manage",
-    description: "ROLLER-API je Standort anbinden",
+    description: "ROLLER & GetMyInvoices anbinden",
   },
 ];

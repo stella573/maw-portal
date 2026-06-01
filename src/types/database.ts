@@ -357,6 +357,36 @@ export type Database = {
         };
         Relationships: [];
       };
+      getmyinvoices_connection: {
+        Row: {
+          id: boolean;
+          base_url: string;
+          api_key: string;
+          is_active: boolean;
+          last_verified_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: boolean;
+          base_url?: string;
+          api_key: string;
+          is_active?: boolean;
+          last_verified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: boolean;
+          base_url?: string;
+          api_key?: string;
+          is_active?: boolean;
+          last_verified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       roller_connections: {
         Row: {
           location_id: string;
