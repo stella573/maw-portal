@@ -41,6 +41,25 @@ const serverSchema = z.object({
   RESEND_WEBHOOK_SECRET: z.string().min(1).optional(),
   RESEND_FROM_EMAIL: z.string().email().optional(),
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  // Optionales Override für das Standard-/Stufe-1-Claude-Modell der
+  // Rechnungsverarbeitung. Fehlt es, greift der Default (Haiku → Sonnet-Eskalation).
+  ANTHROPIC_MODEL: z.string().min(1).optional(),
+  // Schaltet den automatischen Upload zu GetMyInvoices frei. Aus Sicherheits-
+  // gründen serverseitig steuerbar (Werte: "true"/"1" aktivieren).
+  GETMYINVOICES_AUTO_UPLOAD: z.string().optional(),
+  // Google Drive (serverseitige Ablage). Service-Account-JSON als String,
+  // Ziel-Root-Ordner und optionale Domain-Wide-Delegation. Alles optional, damit
+  // Build/Start ohne diese Werte nicht bricht – die Ablage meldet zur Laufzeit
+  // klar, wenn sie fehlen.
+  GOOGLE_SERVICE_ACCOUNT_KEY: z.string().min(1).optional(),
+  GOOGLE_DRIVE_ROOT_FOLDER_ID: z.string().min(1).optional(),
+  GOOGLE_DRIVE_IMPERSONATED_USER_EMAIL: z.string().email().optional(),
+  // Personio-Integration (Mitarbeiter-Sync). Optional, damit Build/Start ohne
+  // diese Werte nicht bricht – der Sync meldet zur Laufzeit klar, wenn sie fehlen.
+  PERSONIO_CLIENT_ID: z.string().min(1).optional(),
+  PERSONIO_CLIENT_SECRET: z.string().min(1).optional(),
+  // Schützt den Cron-Sync-Endpoint (Vercel Cron sendet diesen als Bearer-Token).
+  PERSONIO_SYNC_SECRET: z.string().min(1).optional(),
 });
 
 type PublicEnv = z.infer<typeof publicSchema>;
@@ -111,6 +130,14 @@ export function getServerEnv() {
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
+    GETMYINVOICES_AUTO_UPLOAD: process.env.GETMYINVOICES_AUTO_UPLOAD,
+    GOOGLE_SERVICE_ACCOUNT_KEY: process.env.GOOGLE_SERVICE_ACCOUNT_KEY,
+    GOOGLE_DRIVE_ROOT_FOLDER_ID: process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID,
+    GOOGLE_DRIVE_IMPERSONATED_USER_EMAIL: process.env.GOOGLE_DRIVE_IMPERSONATED_USER_EMAIL,
     RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
+    PERSONIO_CLIENT_ID: process.env.PERSONIO_CLIENT_ID,
+    PERSONIO_CLIENT_SECRET: process.env.PERSONIO_CLIENT_SECRET,
+    PERSONIO_SYNC_SECRET: process.env.PERSONIO_SYNC_SECRET,
   });
 }

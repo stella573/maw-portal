@@ -1,4 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
+import { getJobsForAttachments } from "@/services/attachments/invoice-processing";
+import { getDriveRecordsForAttachments } from "@/services/attachments/google-drive-storage";
+import type { InvoiceJob, DriveRecord } from "@/lib/ai/invoice-types";
 import type {
   TicketStatus,
   TicketPriority,
@@ -33,11 +36,21 @@ export interface TicketDetailAttachment {
   fileName: string;
   contentType: string | null;
   sizeBytes: number | null;
+  /** Rechnungsverarbeitungs-Job (KI + GetMyInvoices), falls vorhanden. */
+  job: InvoiceJob | null;
+  /** Google-Drive-Ablage, falls vorhanden. */
+  drive: DriveRecord | null;
 }
 
 export interface AssignableAgent {
   profileId: string;
   name: string;
+}
+
+export interface TicketTag {
+  id: string;
+  name: string;
+  color: string;
 }
 
 export interface TicketDetail {
@@ -58,6 +71,10 @@ export interface TicketDetail {
   attachments: TicketDetailAttachment[];
   /** Mitglieder des Postfachs – mögliche Bearbeiter für die Zuweisung. */
   assignableAgents: AssignableAgent[];
+  /** Tags, die diesem Ticket zugeordnet sind. */
+  tags: TicketTag[];
+  /** Gesamter Tag-Katalog (für die Auswahl). */
+  allTags: TicketTag[];
 }
 
 /**
@@ -98,6 +115,26 @@ export async function getTicketDetail(
     .select("id, message_id, file_name, content_type, size_bytes")
     .eq("ticket_id", ticketId)
     .order("created_at", { ascending: true });
+
+  // Rechnungs-Jobs + Drive-Ablagen der Anhänge laden (RLS-gebunden).
+  const attachmentIds = (attachments ?? []).map((a) => a.id);
+  const [attachmentJobs, driveRecords] = await Promise.all([
+    getJobsForAttachments(supabase, attachmentIds),
+    getDriveRecordsForAttachments(supabase, attachmentIds),
+  ]);
+
+  // Tags dieses Tickets + gesamter Tag-Katalog (für die Auswahl).
+  const [{ data: tagLinks }, { data: tagCatalog }] = await Promise.all([
+    supabase
+      .from("ticket_tags")
+      .select("tags(id, name, color)")
+      .eq("ticket_id", ticketId),
+    supabase.from("tags").select("id, name, color").order("name"),
+  ]);
+  const tags: TicketTag[] = (tagLinks ?? [])
+    .map((l) => l.tags as unknown as TicketTag | null)
+    .filter((t): t is TicketTag => t !== null);
+  const allTags: TicketTag[] = (tagCatalog ?? []) as TicketTag[];
 
   // Zuweisbare Bearbeiter = Mitglieder des Postfachs (RLS lässt nur erlaubte zu).
   let assignableAgents: AssignableAgent[] = [];
@@ -187,7 +224,11 @@ export async function getTicketDetail(
       fileName: a.file_name,
       contentType: a.content_type,
       sizeBytes: a.size_bytes,
+      job: attachmentJobs.get(a.id) ?? null,
+      drive: driveRecords.get(a.id) ?? null,
     })),
     assignableAgents,
+    tags,
+    allTags,
   };
 }

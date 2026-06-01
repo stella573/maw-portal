@@ -32,6 +32,69 @@ export function renderEmailHtml(bodyText: string, signatureHtml?: string | null)
   return baseTemplate(body + signature, year);
 }
 
+function escapeAttr(s: string): string {
+  return escapeHtml(s).replace(/"/g, "&quot;");
+}
+
+/**
+ * Schön gestaltete Willkommens-Mail im MAW-Design: informiert den Mitarbeiter,
+ * dass ein Zugang im Mitarbeiter-HUB erstellt wurde, inkl. Kennung, Initial-
+ * passwort und Login-Button. Pflicht-Passwortwechsel + 2FA werden erklärt.
+ */
+export function renderWelcomeEmail(opts: {
+  name: string;
+  email: string;
+  password: string;
+  loginUrl: string;
+}): string {
+  const { name, email, password, loginUrl } = opts;
+  const year = new Date().getFullYear();
+  const content = `
+    <h1 style="margin:0 0 14px 0; color:#FFFFFF; font-size:20px; line-height:28px; font-weight:700;">
+      Willkommen im MAW&nbsp;Mitarbeiter-HUB
+    </h1>
+    <p style="margin:0 0 18px 0; color:#E5E7EB; font-size:14px; line-height:24px;">
+      Hallo ${escapeHtml(name)},<br>
+      für dich wurde ein Zugang zum internen Mitarbeiter-Portal erstellt. Mit diesen
+      Zugangsdaten kannst du dich anmelden:
+    </p>
+
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0"
+      style="background:#0A0E17; border:1px solid rgba(255,255,255,0.08); border-radius:12px; margin:0 0 22px 0;">
+      <tr>
+        <td style="padding:18px 20px;">
+          <div style="color:#6B7280; font-size:12px; line-height:16px;">E-Mail (Kennung)</div>
+          <div style="color:#FFFFFF; font-size:15px; font-weight:600; line-height:22px; margin-bottom:12px;">
+            ${escapeHtml(email)}
+          </div>
+          <div style="color:#6B7280; font-size:12px; line-height:16px;">Initialpasswort</div>
+          <div style="color:#E8920B; font-size:16px; font-weight:700; line-height:22px; font-family:'Courier New',Courier,monospace; letter-spacing:0.5px;">
+            ${escapeHtml(password)}
+          </div>
+        </td>
+      </tr>
+    </table>
+
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 22px 0;">
+      <tr>
+        <td align="center" style="border-radius:10px; background:#E8920B;">
+          <a href="${escapeAttr(loginUrl)}"
+            style="display:inline-block; padding:13px 28px; color:#0A0E17; font-size:14px; font-weight:700; text-decoration:none; border-radius:10px;">
+            Jetzt anmelden
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0; color:#9CA3AF; font-size:13px; line-height:20px;">
+      Bitte ändere dein Passwort direkt bei der ersten Anmeldung und richte anschließend
+      die Zwei-Faktor-Authentifizierung (2FA) ein – aus Sicherheitsgründen ist 2FA
+      verpflichtend. Solltest du diese Mail unerwartet erhalten haben, wende dich bitte
+      an deine Ansprechperson.
+    </p>`;
+  return baseTemplate(content, year);
+}
+
 function baseTemplate(content: string, year: number): string {
   return `<!DOCTYPE html>
 <html lang="de">

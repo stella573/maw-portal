@@ -2,9 +2,9 @@
 
 import { useActionState, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, StickyNote, Paperclip, Check, RotateCcw, Eye, PenLine } from "lucide-react";
+import { ArrowLeft, StickyNote, Paperclip, Check, RotateCcw, Eye, PenLine, Tag as TagIcon, X, Plus } from "lucide-react";
 import Link from "next/link";
-import { updateTicket, addNote, assignTicket } from "./actions";
+import { updateTicket, addNote, assignTicket, addTicketTag, removeTicketTag } from "./actions";
 import { setTicketStatus } from "../actions";
 import {
   TICKET_STATUS_LABELS,
@@ -19,16 +19,24 @@ import type {
   TicketDetail,
   TicketDetailAttachment,
 } from "@/modules/maildesk/services/ticket-detail";
+import type { ReplyTemplate } from "@/modules/maildesk/services/templates";
 import { ReplyEditor } from "./reply-editor";
+import { InvoicePanel } from "@/components/attachments/invoice-panel";
 
 export function TicketView({
   ticket,
   showDiagnostics = false,
   currentUser,
+  templates,
+  mailboxes,
+  canTag,
 }: {
   ticket: TicketDetail;
   showDiagnostics?: boolean;
   currentUser: { profileId: string; name: string } | null;
+  templates: ReplyTemplate[];
+  mailboxes: { id: string; name: string }[];
+  canTag: boolean;
 }) {
   // Live: Status-/Zuweisungs-Änderungen und neue Nachrichten sofort spiegeln.
   useRealtimeRefresh([
@@ -52,9 +60,6 @@ export function TicketView({
       >
         <ArrowLeft className="h-4 w-4" /> Zurück zur Inbox
       </Link>
-
-      {/* Hinweis: weitere Bearbeiter im selben Ticket (Doppelbearbeitung vermeiden) */}
-      {here.length > 0 && <PresenceBanner peers={here} />}
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Hauptspalte: Verlauf */}
@@ -116,17 +121,25 @@ export function TicketView({
             ))}
           </div>
 
+          {/* Hinweis direkt über dem Antwortbereich: wer ist sonst noch im
+              Ticket bzw. tippt gerade? (Doppelbearbeitung vermeiden) */}
+          {here.length > 0 && <PresenceBanner peers={here} />}
+
           {/* Antwort-Editor: Versand über Resend + KI-Vorschläge */}
           <ReplyEditor
             ticketId={ticket.id}
             hasCustomer={!!ticket.customerEmail}
             onTypingChange={setTyping}
+            templates={templates}
+            mailboxes={mailboxes}
+            defaultMailboxId={ticket.mailboxId}
           />
         </div>
 
         {/* Seitenspalte: Steuerung + Kunde + Notizen */}
         <div className="space-y-4">
           <TicketControls ticket={ticket} />
+          <TagsCard ticket={ticket} canTag={canTag} />
           <CustomerCard ticket={ticket} />
           <NotesCard ticket={ticket} />
         </div>
@@ -319,6 +332,91 @@ function AssignControl({ ticket }: { ticket: TicketDetail }) {
   );
 }
 
+function TagsCard({ ticket, canTag }: { ticket: TicketDetail; canTag: boolean }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const usedIds = new Set(ticket.tags.map((t) => t.id));
+  const available = ticket.allTags.filter((t) => !usedIds.has(t.id));
+
+  function apply(tagId: string) {
+    if (!tagId) return;
+    startTransition(async () => {
+      await addTicketTag(ticket.id, tagId);
+      router.refresh();
+    });
+  }
+  function remove(tagId: string) {
+    startTransition(async () => {
+      await removeTicketTag(ticket.id, tagId);
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+      <h2 className="flex items-center gap-1.5 text-sm font-medium">
+        <TagIcon className="h-4 w-4" /> Tags
+      </h2>
+      <div className={`mt-3 flex flex-wrap gap-1.5 ${pending ? "opacity-60" : ""}`}>
+        {ticket.tags.length === 0 && (
+          <span className="text-xs text-[var(--muted)]">Keine Tags.</span>
+        )}
+        {ticket.tags.map((t) => (
+          <span
+            key={t.id}
+            className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs"
+            style={{
+              backgroundColor: `${t.color}22`,
+              color: t.color,
+            }}
+          >
+            <span
+              className="h-2 w-2 rounded-full"
+              style={{ backgroundColor: t.color }}
+            />
+            {t.name}
+            {canTag && (
+              <button
+                type="button"
+                onClick={() => remove(t.id)}
+                disabled={pending}
+                aria-label={`Tag ${t.name} entfernen`}
+                className="opacity-70 transition hover:opacity-100"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </span>
+        ))}
+      </div>
+
+      {canTag && available.length > 0 && (
+        <div className="mt-3 flex items-center gap-1.5">
+          <Plus className="h-3.5 w-3.5 text-[var(--muted)]" />
+          <select
+            value=""
+            disabled={pending}
+            onChange={(e) => apply(e.target.value)}
+            className="flex-1 rounded-lg border border-[var(--border)] bg-transparent px-2 py-1.5 text-sm outline-none focus:border-brand-500"
+          >
+            <option value="">Tag hinzufügen…</option>
+            {available.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+      {canTag && ticket.allTags.length === 0 && (
+        <p className="mt-3 text-xs text-[var(--muted)]">
+          Noch keine Tags angelegt – unter Einstellungen → Tags.
+        </p>
+      )}
+    </div>
+  );
+}
+
 function CustomerCard({ ticket }: { ticket: TicketDetail }) {
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
@@ -409,25 +507,31 @@ function stripHtml(html: string | null): string {
     .trim();
 }
 
-/** Liste der Anhänge einer Nachricht – Download über die berechtigte Route. */
+/**
+ * Liste der Anhänge einer Nachricht – Download über die berechtigte Route.
+ * Zu jedem Anhang zeigt ein KI-Badge an, ob es sich um eine Rechnung handelt
+ * (automatische Erkennung, serverseitig). Re-Analyse über "Erneut prüfen".
+ */
 function AttachmentList({ items }: { items: TicketDetailAttachment[] }) {
   if (items.length === 0) return null;
   return (
-    <div className="mt-3 flex flex-wrap gap-2">
+    <div className="mt-3 flex flex-col gap-2.5">
       {items.map((a) => (
-        <a
-          key={a.id}
-          href={`/api/mail/attachment/${a.id}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--surface)]"
-        >
-          <Paperclip className="h-3.5 w-3.5 shrink-0" />
-          <span className="max-w-[200px] truncate">{a.fileName}</span>
-          {a.sizeBytes != null && (
-            <span className="text-[var(--muted)]">{formatBytes(a.sizeBytes)}</span>
-          )}
-        </a>
+        <div key={a.id} className="flex flex-col gap-1.5">
+          <a
+            href={`/api/mail/attachment/${a.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--surface)]"
+          >
+            <Paperclip className="h-3.5 w-3.5 shrink-0" />
+            <span className="max-w-[200px] truncate">{a.fileName}</span>
+            {a.sizeBytes != null && (
+              <span className="text-[var(--muted)]">{formatBytes(a.sizeBytes)}</span>
+            )}
+          </a>
+          <InvoicePanel attachmentId={a.id} initial={a.job} initialDrive={a.drive} />
+        </div>
       ))}
     </div>
   );

@@ -42,6 +42,7 @@ export default async function UsersPage() {
         roles={roles}
         locations={locations}
         canManage={can(ctx, "users.manage")}
+        canManageSignatures={can(ctx, "signatures.manage")}
       />
     </div>
   );

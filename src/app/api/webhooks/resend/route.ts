@@ -9,6 +9,7 @@ import {
   fetchReceivedEmail,
   fetchReceivedAttachments,
 } from "@/lib/resend/inbound";
+import { isSupportedAttachment } from "@/lib/ai/invoice-types";
 import type { Json } from "@/types/database";
 
 /**
@@ -221,11 +222,13 @@ export async function POST(request: NextRequest) {
   let matchedByReference = false;
   const reference = extractTicketReference(subject);
   if (reference) {
+    // Referenz ist global eindeutig → KEINE Einschränkung auf das empfangende
+    // Postfach. So thready eine Antwort auch dann ins richtige Ticket, wenn sie
+    // (durch Senden aus einem anderen Postfach) an einer anderen Adresse ankommt.
     const { data: byRef } = await supabase
       .from("tickets")
       .select("id")
       .eq("reference", reference)
-      .eq("mailbox_id", mailboxId)
       .maybeSingle();
     if (byRef) {
       ticketId = byRef.id;
@@ -301,15 +304,37 @@ export async function POST(request: NextRequest) {
           console.error("[resend-webhook] storage upload:", upErr.message);
           continue;
         }
-        await supabase.from("attachments").insert({
-          message_id: insertedMsg.id,
-          ticket_id: ticketId,
-          storage_path: storagePath,
-          file_name: att.filename.slice(0, 200),
-          content_type: att.contentType,
-          size_bytes: att.content.byteLength,
-          provider_attachment_id: att.id,
-        });
+        const { data: insertedAtt } = await supabase
+          .from("attachments")
+          .insert({
+            message_id: insertedMsg.id,
+            ticket_id: ticketId,
+            storage_path: storagePath,
+            file_name: att.filename.slice(0, 200),
+            content_type: att.contentType,
+            size_bytes: att.content.byteLength,
+            provider_attachment_id: att.id,
+          })
+          .select("id")
+          .single();
+
+        // Rechnungsverarbeitung für unterstützte Dateitypen vormerken. Der
+        // eigentliche (langsame) KI-/GMI-Ablauf wird hier BEWUSST NICHT
+        // abgewartet – das würde den Webhook verzögern und Resend-Retries
+        // (→ Doppel-Tickets) riskieren. Stattdessen legen wir einen Job an
+        // (Status "uploaded"); die Verarbeitung wird beim ersten Ansehen
+        // (Ticket/Dashboard) automatisch gestartet.
+        if (
+          insertedAtt &&
+          isSupportedAttachment(att.filename, att.contentType)
+        ) {
+          await supabase
+            .from("invoice_processing_jobs")
+            .upsert(
+              { attachment_id: insertedAtt.id, status: "uploaded" },
+              { onConflict: "attachment_id" },
+            );
+        }
       }
     } catch (err) {
       console.error("[resend-webhook] Anhang-Import:", err);

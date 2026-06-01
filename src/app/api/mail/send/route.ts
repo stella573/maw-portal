@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/services/auth/current-user";
 import { can } from "@/lib/auth/permissions";
 import { getResend, getFromEmail } from "@/lib/resend/client";
 import { renderEmailHtml } from "@/lib/resend/email-template";
+import { senderDisplayName } from "@/config/app";
 import { logAudit } from "@/lib/audit/log";
 
 /**
@@ -27,6 +29,8 @@ const bodySchema = z.object({
   ticketId: z.string().uuid(),
   bodyText: z.string().min(1),
   attachmentIds: z.array(z.string().uuid()).max(10).optional(),
+  /** Optional: aus welchem Postfach gesendet wird (sonst Postfach des Tickets). */
+  mailboxId: z.string().uuid().optional(),
 });
 
 /** Stellt sicher, dass die Ticket-Referenz im Betreff steht (Threading). */
@@ -55,7 +59,7 @@ export async function POST(request: NextRequest) {
   const { data: ticket, error: ticketErr } = await supabase
     .from("tickets")
     .select(
-      "id, reference, subject, location_id, customers(email), mailboxes(name, email)",
+      "id, reference, subject, location_id, mailbox_id, customers(email), mailboxes(name, email)",
     )
     .eq("id", input.ticketId)
     .single();
@@ -70,10 +74,35 @@ export async function POST(request: NextRequest) {
   }
 
   const customer = ticket.customers as unknown as { email: string } | null;
-  const mailbox = ticket.mailboxes as unknown as {
+  let mailbox = ticket.mailboxes as unknown as {
     name: string;
     email: string;
   } | null;
+
+  // Optional: aus einem anderen (eigenen) Postfach senden. Ein vom Ticket-
+  // Postfach ABWEICHENDES Absenderpostfach erfordert das Recht
+  // mailboxes.send_as. RLS stellt zusätzlich sicher, dass nur sichtbare
+  // Postfächer wählbar sind.
+  if (input.mailboxId && input.mailboxId !== ticket.mailbox_id) {
+    if (!can(user, "mailboxes.send_as")) {
+      return NextResponse.json(
+        { error: "Keine Berechtigung, aus einem anderen Postfach zu senden" },
+        { status: 403 },
+      );
+    }
+    const { data: chosen } = await supabase
+      .from("mailboxes")
+      .select("name, email, is_active")
+      .eq("id", input.mailboxId)
+      .maybeSingle();
+    if (!chosen || !chosen.is_active) {
+      return NextResponse.json(
+        { error: "Gewähltes Postfach nicht verfügbar" },
+        { status: 422 },
+      );
+    }
+    mailbox = { name: chosen.name, email: chosen.email };
+  }
 
   const to = customer?.email;
   if (!to) {
@@ -83,11 +112,12 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Absender = Postfach-Adresse (mit Anzeigename), sonst globaler Fallback.
+  // Absender = Marke + Postfachname (z. B. "Mining Adventure World – Dorsten"),
+  // damit Empfänger immer erkennen, von wem die Mail kommt. Fallback global.
   let from: string;
   try {
     from = mailbox?.email
-      ? `${mailbox.name} <${mailbox.email}>`
+      ? `${senderDisplayName(mailbox.name)} <${mailbox.email}>`
       : getFromEmail();
   } catch {
     return NextResponse.json(
@@ -115,14 +145,21 @@ export async function POST(request: NextRequest) {
   const attachmentRows: { id: string; storage_path: string; file_name: string }[] = [];
   const resendAttachments: { filename: string; content: Buffer }[] = [];
   if (input.attachmentIds && input.attachmentIds.length > 0) {
+    // Auswahl/Berechtigung über den RLS-Client (nur Anhänge dieses Tickets,
+    // die der User sehen darf, noch ohne message_id).
     const { data: atts } = await supabase
       .from("attachments")
       .select("id, storage_path, file_name")
       .in("id", input.attachmentIds)
       .eq("ticket_id", ticket.id)
       .is("message_id", null);
+    // Download über Service-Role: der Bucket ist privat und hat bewusst KEINE
+    // storage-Policy für authenticated (s. Migration 0009). Der User-Client
+    // dürfte daher nicht lesen → Anhänge würden sonst still verworfen und die
+    // Mail ginge OHNE Anhang raus. Berechtigung ist oben bereits geprüft.
+    const admin = createAdminClient();
     for (const a of atts ?? []) {
-      const { data: blob, error: dlErr } = await supabase.storage
+      const { data: blob, error: dlErr } = await admin.storage
         .from("mail-attachments")
         .download(a.storage_path);
       if (dlErr || !blob) {

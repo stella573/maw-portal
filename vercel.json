@@ -3,5 +3,8 @@
   "framework": "nextjs",
   "buildCommand": "next build",
   "installCommand": "npm install",
-  "regions": ["fra1"]
+  "regions": ["fra1"],
+  "crons": [
+    { "path": "/api/personio/sync", "schedule": "0 6 * * *" }
+  ]
 }

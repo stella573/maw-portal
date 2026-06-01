@@ -1,9 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
+import { getInboxMailboxes } from "./tickets";
 
 /**
  * Kennzahlen für das Dashboard. Alle Abfragen laufen über den RLS-Client →
  * jeder User sieht nur Zahlen zu Tickets, die er auch sehen darf
- * (Postfach-Mitgliedschaft / owner-admin / zugewiesen).
+ * (Postfach-Mitgliedschaft / Owner / zugewiesen).
+ *
+ * Die Postfach-Übersicht nutzt dieselbe Sichtbarkeit wie die Inbox:
+ * NUR der Owner sieht alle Postfächer, alle anderen nur ihre zugewiesenen.
  */
 
 export interface DashboardStats {
@@ -31,7 +35,7 @@ export async function getDashboardStats(
     resolvedTodayRes,
     unassignedRes,
     mineRes,
-    mailboxes,
+    inboxMailboxes,
   ] = await Promise.all([
     supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "open"),
     supabase.from("tickets").select("id", { count: "exact", head: true }).eq("status", "pending"),
@@ -50,19 +54,12 @@ export async function getDashboardStats(
       .select("id", { count: "exact", head: true })
       .eq("assignee_id", profileId)
       .in("status", ["open", "pending"]),
-    supabase.from("mailboxes").select("id, name").eq("is_active", true).order("name"),
+    // Nur Postfächer, auf die der User Zugriff hat (Owner = alle, sonst eigene
+    // Mitgliedschaften). Liefert die offenen Zahlen gleich mit.
+    getInboxMailboxes(),
   ]);
 
-  // Offene Tickets je sichtbarem Postfach.
-  const perMailbox: { name: string; open: number }[] = [];
-  for (const mb of mailboxes.data ?? []) {
-    const { count } = await supabase
-      .from("tickets")
-      .select("id", { count: "exact", head: true })
-      .eq("mailbox_id", mb.id)
-      .eq("status", "open");
-    perMailbox.push({ name: mb.name, open: count ?? 0 });
-  }
+  const perMailbox = inboxMailboxes.map((mb) => ({ name: mb.name, open: mb.openCount }));
 
   return {
     open: openRes.count ?? 0,

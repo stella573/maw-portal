@@ -33,6 +33,8 @@ export interface InboxTicket {
   preview: string | null;
   /** true, wenn die letzte Nachricht vom Kunden kam (noch unbeantwortet). */
   needsReply: boolean;
+  /** Zugeordnete Tags (für Chips in der Liste). */
+  tags: { id: string; name: string; color: string }[];
 }
 
 export interface TicketFilters {
@@ -43,20 +45,37 @@ export interface TicketFilters {
   statuses?: TicketStatus[];
   priority?: TicketPriority;
   search?: string;
+  /** Nur Tickets mit diesem Tag. */
+  tagId?: string;
 }
 
 /**
- * Postfächer, die der eingeloggte User sehen darf, inkl. Anzahl offener
- * Tickets. RLS sorgt dafür, dass nur erlaubte Postfächer zurückkommen.
+ * Postfächer für die Inbox. NUR der Owner sieht alle Postfächer; alle anderen
+ * (inkl. Admin) sehen ausschließlich ihre zugewiesenen (Postfach-Mitgliedschaft).
  */
 export async function getInboxMailboxes(): Promise<InboxMailbox[]> {
   const supabase = await createClient();
+  const ctx = await getCurrentUser();
+  if (!ctx) return [];
+  const isOwner = ctx.assignments.some((a) => a.roleKey === "owner");
 
-  const { data: boxes } = await supabase
+  let boxesQuery = supabase
     .from("mailboxes")
     .select("id, name, email")
     .eq("is_active", true)
     .order("name");
+
+  if (!isOwner) {
+    const { data: memberships } = await supabase
+      .from("mailbox_members")
+      .select("mailbox_id")
+      .eq("profile_id", ctx.profileId);
+    const ids = (memberships ?? []).map((m) => m.mailbox_id);
+    if (ids.length === 0) return [];
+    boxesQuery = boxesQuery.in("id", ids);
+  }
+
+  const { data: boxes } = await boxesQuery;
 
   if (!boxes || boxes.length === 0) return [];
 
@@ -88,6 +107,17 @@ export async function listTickets(
 ): Promise<InboxTicket[]> {
   const supabase = await createClient();
 
+  // Tag-Filter: zuerst die Ticket-IDs zum Tag holen, dann einschränken.
+  let tagTicketIds: string[] | null = null;
+  if (filters.tagId) {
+    const { data: links } = await supabase
+      .from("ticket_tags")
+      .select("ticket_id")
+      .eq("tag_id", filters.tagId);
+    tagTicketIds = (links ?? []).map((l) => l.ticket_id);
+    if (tagTicketIds.length === 0) return [];
+  }
+
   let query = supabase
     .from("tickets")
     .select(
@@ -97,6 +127,7 @@ export async function listTickets(
     .order("created_at", { ascending: false })
     .limit(200);
 
+  if (tagTicketIds) query = query.in("id", tagTicketIds);
   if (filters.mailboxId) query = query.eq("mailbox_id", filters.mailboxId);
   if (filters.statuses && filters.statuses.length > 0) {
     query = query.in("status", filters.statuses);
@@ -115,24 +146,34 @@ export async function listTickets(
   const ticketIds = (data ?? []).map((t) => t.id);
 
   // Letzte Nachricht je Ticket für Vorschau + "unbeantwortet"-Markierung.
-  // Eine Abfrage über alle gelisteten Tickets, dann je Ticket die neueste.
+  // DB-seitig (DISTINCT ON) → nur EINE bereits gekürzte/HTML-bereinigte Zeile
+  // je Ticket statt aller (großen) Nachrichten-Bodies. Deutlich schneller,
+  // besonders im "Alle"-Tab.
   const latestByTicket = new Map<
     string,
-    { direction: MessageDirection; body: string | null }
+    { direction: MessageDirection; preview: string | null }
   >();
+  const tagsByTicket = new Map<string, { id: string; name: string; color: string }[]>();
   if (ticketIds.length > 0) {
-    const { data: msgs } = await supabase
-      .from("messages")
-      .select("ticket_id, direction, body_text, body_html, created_at")
-      .in("ticket_id", ticketIds)
-      .order("created_at", { ascending: false });
-    for (const m of msgs ?? []) {
-      // dank Sortierung ist der erste Treffer je Ticket der neueste
-      if (latestByTicket.has(m.ticket_id)) continue;
-      const body = (m.body_text && m.body_text.trim())
-        ? m.body_text
-        : stripToText(m.body_html);
-      latestByTicket.set(m.ticket_id, { direction: m.direction, body });
+    const [{ data: latest }, { data: tagLinks }] = await Promise.all([
+      supabase.rpc("ticket_last_messages", { p_ticket_ids: ticketIds }),
+      supabase
+        .from("ticket_tags")
+        .select("ticket_id, tags(id, name, color)")
+        .in("ticket_id", ticketIds),
+    ]);
+    for (const row of latest ?? []) {
+      latestByTicket.set(row.ticket_id, {
+        direction: row.direction,
+        preview: row.preview,
+      });
+    }
+    for (const link of tagLinks ?? []) {
+      const tag = link.tags as unknown as { id: string; name: string; color: string } | null;
+      if (!tag) continue;
+      const list = tagsByTicket.get(link.ticket_id) ?? [];
+      list.push(tag);
+      tagsByTicket.set(link.ticket_id, list);
     }
   }
 
@@ -152,27 +193,26 @@ export async function listTickets(
       customerName: c?.full_name ?? null,
       lastMessageAt: t.last_message_at,
       createdAt: t.created_at,
-      preview: latest?.body ? truncate(latest.body, 120) : null,
+      preview: latest?.preview ? truncate(latest.preview, 120) : null,
       // unbeantwortet = letzte Nachricht kam vom Kunden (inbound)
       needsReply: latest ? latest.direction === "inbound" : false,
+      tags: tagsByTicket.get(t.id) ?? [],
     };
   });
-}
-
-function stripToText(html: string | null): string | null {
-  if (!html) return null;
-  const t = html
-    .replace(/<\s*br\s*\/?>/gi, " ")
-    .replace(/<[^>]+>/g, "")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return t || null;
 }
 
 function truncate(s: string, n: number): string {
   const clean = s.replace(/\s+/g, " ").trim();
   return clean.length > n ? `${clean.slice(0, n)}…` : clean;
+}
+
+/** Tag-Katalog für den Inbox-Filter (alle eingeloggten dürfen lesen). */
+export async function listInboxTags(): Promise<
+  { id: string; name: string; color: string }[]
+> {
+  const supabase = await createClient();
+  const { data } = await supabase.from("tags").select("id, name, color").order("name");
+  return data ?? [];
 }
 
 /** Kann der aktuelle User Tickets erstellen? (UI-Gating) */

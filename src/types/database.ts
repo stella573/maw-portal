@@ -19,6 +19,48 @@ export type TicketStatus = "open" | "pending" | "resolved";
 export type TicketPriority = "low" | "normal" | "high" | "urgent";
 export type MessageDirection = "inbound" | "outbound";
 export type MessageChannel = "email" | "internal";
+/** Fachliches KI-Urteil zu einem Anhang (siehe attachment_ai_analysis). */
+export type InvoiceClassification =
+  | "invoice"
+  | "not_invoice"
+  | "unclear"
+  | "unsupported_file_type"
+  | "error";
+/** Status-Lebenszyklus eines Rechnungsverarbeitungs-Jobs. */
+export type InvoiceJobStatus =
+  | "uploaded"
+  | "ai_check_started"
+  | "unsupported_file_type"
+  | "not_invoice"
+  | "invoice_detected"
+  | "extraction_started"
+  | "extraction_completed"
+  | "supplier_matching_started"
+  | "supplier_matched"
+  | "supplier_match_unclear"
+  | "needs_manual_supplier_review"
+  | "getmyinvoices_upload_started"
+  | "getmyinvoices_upload_completed"
+  | "getmyinvoices_upload_failed"
+  | "skipped_receipt"
+  | "error";
+/** Ablage-Kategorie in Google Drive. */
+export type GoogleDriveStorageCategory =
+  | "invoice"
+  | "invoice_supplier_unclear"
+  | "not_invoice"
+  | "unclear"
+  | "unsupported_file_type"
+  | "error";
+/** Status der Google-Drive-Ablage. */
+export type GoogleDriveUploadStatus =
+  | "pending"
+  | "folder_creation_started"
+  | "folder_ready"
+  | "upload_started"
+  | "uploaded"
+  | "duplicate_skipped"
+  | "failed";
 export type AuditAction =
   | "auth.login"
   | "auth.logout"
@@ -357,6 +399,120 @@ export type Database = {
         };
         Relationships: [];
       };
+      getmyinvoices_connection: {
+        Row: {
+          id: boolean;
+          base_url: string;
+          api_key: string;
+          account_id: string | null;
+          is_active: boolean;
+          last_verified_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: boolean;
+          base_url?: string;
+          api_key: string;
+          account_id?: string | null;
+          is_active?: boolean;
+          last_verified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: boolean;
+          base_url?: string;
+          api_key?: string;
+          account_id?: string | null;
+          is_active?: boolean;
+          last_verified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      roller_connections: {
+        Row: {
+          location_id: string;
+          base_url: string;
+          client_id: string;
+          client_secret: string;
+          is_active: boolean;
+          venue_name: string | null;
+          last_verified_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          location_id: string;
+          base_url?: string;
+          client_id: string;
+          client_secret: string;
+          is_active?: boolean;
+          venue_name?: string | null;
+          last_verified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          location_id?: string;
+          base_url?: string;
+          client_id?: string;
+          client_secret?: string;
+          is_active?: boolean;
+          venue_name?: string | null;
+          last_verified_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      personio_employees: {
+        Row: {
+          personio_id: number;
+          email: string | null;
+          first_name: string | null;
+          last_name: string | null;
+          position: string | null;
+          department: string | null;
+          office: string | null;
+          status: string;
+          profile_id: string | null;
+          location_id: string | null;
+          synced_at: string;
+          created_at: string;
+        };
+        Insert: {
+          personio_id: number;
+          email?: string | null;
+          first_name?: string | null;
+          last_name?: string | null;
+          position?: string | null;
+          department?: string | null;
+          office?: string | null;
+          status?: string;
+          profile_id?: string | null;
+          location_id?: string | null;
+          synced_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          personio_id?: number;
+          email?: string | null;
+          first_name?: string | null;
+          last_name?: string | null;
+          position?: string | null;
+          department?: string | null;
+          office?: string | null;
+          status?: string;
+          profile_id?: string | null;
+          location_id?: string | null;
+          synced_at?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       mailbox_aliases: {
         Row: {
           id: string;
@@ -537,6 +693,252 @@ export type Database = {
         };
         Relationships: [];
       };
+      invoice_processing_jobs: {
+        Row: {
+          id: string;
+          attachment_id: string;
+          file_hash: string | null;
+          status: InvoiceJobStatus;
+          is_invoice: boolean;
+          invoice_confidence: number;
+          classification: InvoiceClassification;
+          supplier_match_score: number;
+          matched_supplier_id: string | null;
+          matched_supplier_name: string | null;
+          supplier_match_reason: string | null;
+          manual_supplier_confirmed: boolean;
+          getmyinvoices_document_id: string | null;
+          getmyinvoices_already_existed: boolean;
+          model_used: string | null;
+          error_message: string | null;
+          raw_claude_response: Json | null;
+          raw_getmyinvoices_response: Json | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          attachment_id: string;
+          file_hash?: string | null;
+          status?: InvoiceJobStatus;
+          is_invoice?: boolean;
+          invoice_confidence?: number;
+          classification?: InvoiceClassification;
+          supplier_match_score?: number;
+          matched_supplier_id?: string | null;
+          matched_supplier_name?: string | null;
+          supplier_match_reason?: string | null;
+          manual_supplier_confirmed?: boolean;
+          getmyinvoices_document_id?: string | null;
+          getmyinvoices_already_existed?: boolean;
+          model_used?: string | null;
+          error_message?: string | null;
+          raw_claude_response?: Json | null;
+          raw_getmyinvoices_response?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          attachment_id?: string;
+          file_hash?: string | null;
+          status?: InvoiceJobStatus;
+          is_invoice?: boolean;
+          invoice_confidence?: number;
+          classification?: InvoiceClassification;
+          supplier_match_score?: number;
+          matched_supplier_id?: string | null;
+          matched_supplier_name?: string | null;
+          supplier_match_reason?: string | null;
+          manual_supplier_confirmed?: boolean;
+          getmyinvoices_document_id?: string | null;
+          getmyinvoices_already_existed?: boolean;
+          model_used?: string | null;
+          error_message?: string | null;
+          raw_claude_response?: Json | null;
+          raw_getmyinvoices_response?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "invoice_processing_jobs_attachment_id_fkey";
+            columns: ["attachment_id"];
+            referencedRelation: "attachments";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      extracted_invoice_data: {
+        Row: {
+          id: string;
+          attachment_id: string;
+          invoice_processing_job_id: string;
+          vendor_name: string | null;
+          vendor_address: string | null;
+          vendor_vat_id: string | null;
+          vendor_tax_number: string | null;
+          vendor_iban: string | null;
+          vendor_email: string | null;
+          vendor_website: string | null;
+          vendor_country: string | null;
+          invoice_number: string | null;
+          invoice_date: string | null;
+          service_date: string | null;
+          due_date: string | null;
+          net_amount: number | null;
+          tax_amount: number | null;
+          gross_amount: number | null;
+          currency: string | null;
+          customer_number: string | null;
+          order_reference: string | null;
+          description: string | null;
+          payment_status: string | null;
+          document_language: string | null;
+          line_items: Json | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          attachment_id: string;
+          invoice_processing_job_id: string;
+          vendor_name?: string | null;
+          vendor_address?: string | null;
+          vendor_vat_id?: string | null;
+          vendor_tax_number?: string | null;
+          vendor_iban?: string | null;
+          vendor_email?: string | null;
+          vendor_website?: string | null;
+          vendor_country?: string | null;
+          invoice_number?: string | null;
+          invoice_date?: string | null;
+          service_date?: string | null;
+          due_date?: string | null;
+          net_amount?: number | null;
+          tax_amount?: number | null;
+          gross_amount?: number | null;
+          currency?: string | null;
+          customer_number?: string | null;
+          order_reference?: string | null;
+          description?: string | null;
+          payment_status?: string | null;
+          document_language?: string | null;
+          line_items?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          attachment_id?: string;
+          invoice_processing_job_id?: string;
+          vendor_name?: string | null;
+          vendor_address?: string | null;
+          vendor_vat_id?: string | null;
+          vendor_tax_number?: string | null;
+          vendor_iban?: string | null;
+          vendor_email?: string | null;
+          vendor_website?: string | null;
+          vendor_country?: string | null;
+          invoice_number?: string | null;
+          invoice_date?: string | null;
+          service_date?: string | null;
+          due_date?: string | null;
+          net_amount?: number | null;
+          tax_amount?: number | null;
+          gross_amount?: number | null;
+          currency?: string | null;
+          customer_number?: string | null;
+          order_reference?: string | null;
+          description?: string | null;
+          payment_status?: string | null;
+          document_language?: string | null;
+          line_items?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "extracted_invoice_data_attachment_id_fkey";
+            columns: ["attachment_id"];
+            referencedRelation: "attachments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "extracted_invoice_data_invoice_processing_job_id_fkey";
+            columns: ["invoice_processing_job_id"];
+            referencedRelation: "invoice_processing_jobs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      google_drive_storage_records: {
+        Row: {
+          id: string;
+          attachment_id: string;
+          invoice_processing_job_id: string | null;
+          file_hash: string | null;
+          original_filename: string | null;
+          stored_filename: string | null;
+          mime_type: string | null;
+          google_drive_file_id: string | null;
+          google_drive_folder_id: string | null;
+          google_drive_web_view_link: string | null;
+          google_drive_path: string | null;
+          storage_category: GoogleDriveStorageCategory;
+          upload_status: GoogleDriveUploadStatus;
+          error_message: string | null;
+          raw_google_drive_response: Json | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          attachment_id: string;
+          invoice_processing_job_id?: string | null;
+          file_hash?: string | null;
+          original_filename?: string | null;
+          stored_filename?: string | null;
+          mime_type?: string | null;
+          google_drive_file_id?: string | null;
+          google_drive_folder_id?: string | null;
+          google_drive_web_view_link?: string | null;
+          google_drive_path?: string | null;
+          storage_category?: GoogleDriveStorageCategory;
+          upload_status?: GoogleDriveUploadStatus;
+          error_message?: string | null;
+          raw_google_drive_response?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          attachment_id?: string;
+          invoice_processing_job_id?: string | null;
+          file_hash?: string | null;
+          original_filename?: string | null;
+          stored_filename?: string | null;
+          mime_type?: string | null;
+          google_drive_file_id?: string | null;
+          google_drive_folder_id?: string | null;
+          google_drive_web_view_link?: string | null;
+          google_drive_path?: string | null;
+          storage_category?: GoogleDriveStorageCategory;
+          upload_status?: GoogleDriveUploadStatus;
+          error_message?: string | null;
+          raw_google_drive_response?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "google_drive_storage_records_attachment_id_fkey";
+            columns: ["attachment_id"];
+            referencedRelation: "attachments";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       audit_logs: {
         Row: {
           id: string;
@@ -590,6 +992,23 @@ export type Database = {
           p_metadata?: Json;
         };
         Returns: string;
+      };
+      ticket_last_messages: {
+        Args: {
+          p_ticket_ids: string[];
+        };
+        Returns: {
+          ticket_id: string;
+          direction: MessageDirection;
+          preview: string | null;
+        }[];
+      };
+      set_user_signature: {
+        Args: {
+          p_profile_id: string;
+          p_html: string;
+        };
+        Returns: undefined;
       };
     };
     Enums: {

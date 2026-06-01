@@ -1,9 +1,10 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Inbox, Plus, Trash2, UserPlus, Mail, AtSign } from "lucide-react";
+import { Inbox, Plus, Trash2, UserPlus, Mail, AtSign, Pencil } from "lucide-react";
 import {
   createMailbox,
+  updateMailbox,
   setMailboxActive,
   addMember,
   removeMember,
@@ -62,7 +63,7 @@ export function MailboxAdmin({ mailboxes, profiles, locations }: Props) {
           </div>
         )}
         {mailboxes.map((mb) => (
-          <MailboxCard key={mb.id} mailbox={mb} profiles={profiles} />
+          <MailboxCard key={mb.id} mailbox={mb} profiles={profiles} locations={locations} />
         ))}
       </div>
     </div>
@@ -125,15 +126,19 @@ function CreateForm({ locations }: { locations: MailboxLocationOption[] }) {
 function MailboxCard({
   mailbox,
   profiles,
+  locations,
 }: {
   mailbox: ManagedMailbox;
   profiles: AssignableProfile[];
+  locations: MailboxLocationOption[];
 }) {
   const [addResult, addAction, addPending] = useActionState(addMember, null);
   const [activeResult, activeAction] = useActionState(setMailboxActive, null);
   const [aliasResult, aliasAction, aliasPending] = useActionState(addAlias, null);
+  const [editResult, editAction, editPending] = useActionState(updateMailbox, null);
   const [showAdd, setShowAdd] = useState(false);
   const [showAlias, setShowAlias] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   // Nur Profile anbieten, die noch nicht Mitglied sind.
   const memberIds = new Set(mailbox.members.map((m) => m.profileId));
@@ -164,6 +169,12 @@ function MailboxCard({
 
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowEdit((s) => !s)}
+            className="flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--background)]"
+          >
+            <Pencil className="h-3.5 w-3.5" /> Bearbeiten
+          </button>
+          <button
             onClick={() => setShowAlias((s) => !s)}
             className="flex items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--background)]"
           >
@@ -187,6 +198,60 @@ function MailboxCard({
           </form>
         </div>
       </div>
+
+      {/* Bearbeiten */}
+      {showEdit && (
+        <form
+          action={editAction}
+          className="mt-3 grid gap-3 rounded-lg bg-[var(--background)] p-3 sm:grid-cols-2"
+        >
+          <input type="hidden" name="mailboxId" value={mailbox.id} />
+          <div>
+            <label className="block text-xs text-[var(--muted)]">Anzeigename</label>
+            <input
+              name="name"
+              defaultValue={mailbox.name}
+              required
+              className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none focus:border-brand-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-[var(--muted)]">E-Mail-Adresse</label>
+            <input
+              name="email"
+              type="email"
+              defaultValue={mailbox.email}
+              required
+              className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none focus:border-brand-500"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <label className="block text-xs text-[var(--muted)]">Standort (optional)</label>
+            <select
+              name="locationId"
+              defaultValue={mailbox.locationId ?? ""}
+              className="mt-1 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-2 text-sm outline-none focus:border-brand-500 sm:w-1/2"
+            >
+              <option value="">— kein Standort —</option>
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="sm:col-span-2">
+            <button
+              type="submit"
+              disabled={editPending}
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-700 disabled:opacity-60"
+            >
+              {editPending ? "Speichere…" : "Speichern"}
+            </button>
+            <Feedback result={editResult} />
+          </div>
+        </form>
+      )}
 
       {/* Alias-Adressen */}
       {(mailbox.aliases.length > 0 || showAlias) && (
@@ -246,7 +311,7 @@ function MailboxCard({
       <div className="mt-3 flex flex-wrap gap-1.5">
         {mailbox.members.length === 0 && (
           <span className="text-xs text-[var(--muted)]">
-            Keine Mitglieder – nur Owner/Admin sehen dieses Postfach.
+            Keine Mitglieder – nur der Owner sieht dieses Postfach.
           </span>
         )}
         {mailbox.members.map((m) => (

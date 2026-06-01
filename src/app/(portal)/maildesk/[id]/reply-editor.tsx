@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles, Send, Paperclip, X } from "lucide-react";
+import { Sparkles, Send, Paperclip, X, FileText } from "lucide-react";
+import type { ReplyTemplate } from "@/modules/maildesk/services/templates";
+import { InvoicePanel } from "@/components/attachments/invoice-panel";
 
 interface PendingAttachment {
   id: string;
@@ -23,13 +25,23 @@ export function ReplyEditor({
   ticketId,
   hasCustomer,
   onTypingChange,
+  templates = [],
+  mailboxes = [],
+  defaultMailboxId = null,
 }: {
   ticketId: string;
   hasCustomer: boolean;
   onTypingChange?: (typing: boolean) => void;
+  templates?: ReplyTemplate[];
+  mailboxes?: { id: string; name: string }[];
+  defaultMailboxId?: string | null;
 }) {
   const router = useRouter();
   const [body, setBody] = useState("");
+  // Aus welchem Postfach gesendet wird (Standard: Postfach des Tickets).
+  const [mailboxId, setMailboxId] = useState<string>(
+    defaultMailboxId ?? mailboxes[0]?.id ?? "",
+  );
   const [sending, setSending] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [error, setError] = useState("");
@@ -86,6 +98,13 @@ export function ReplyEditor({
     setAttachments((prev) => prev.filter((a) => a.id !== id));
   }
 
+  function insertTemplate(id: string) {
+    const tpl = templates.find((t) => t.id === id);
+    if (!tpl) return;
+    setBody((prev) => (prev.trim() ? `${prev}\n\n${tpl.body}` : tpl.body));
+    signalTyping();
+  }
+
   async function handleSuggest() {
     setSuggesting(true);
     setError("");
@@ -123,6 +142,7 @@ export function ReplyEditor({
           ticketId,
           bodyText: body,
           attachmentIds: attachments.map((a) => a.id),
+          ...(mailboxId ? { mailboxId } : {}),
         }),
       });
       const data = await res.json();
@@ -152,18 +172,61 @@ export function ReplyEditor({
 
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between gap-2">
         <h2 className="text-sm font-medium">Antworten</h2>
-        <button
-          type="button"
-          onClick={handleSuggest}
-          disabled={suggesting || sending}
-          className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--background)] disabled:opacity-60"
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-          {suggesting ? "KI denkt nach…" : "KI-Vorschlag"}
-        </button>
+        <div className="flex items-center gap-2">
+          {templates.length > 0 && (
+            <div className="relative inline-flex items-center">
+              <FileText className="pointer-events-none absolute left-2 h-3.5 w-3.5 text-[var(--muted)]" />
+              <select
+                value=""
+                onChange={(e) => {
+                  insertTemplate(e.target.value);
+                  e.target.value = "";
+                }}
+                disabled={sending || suggesting}
+                title="Antwortvorlage einfügen"
+                className="rounded-lg border border-[var(--border)] bg-transparent py-1.5 pl-7 pr-2 text-xs outline-none focus:border-brand-500 disabled:opacity-60"
+              >
+                <option value="">Vorlage…</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleSuggest}
+            disabled={suggesting || sending}
+            className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1.5 text-xs transition hover:bg-[var(--background)] disabled:opacity-60"
+          >
+            <Sparkles className="h-3.5 w-3.5" />
+            {suggesting ? "KI denkt nach…" : "KI-Vorschlag"}
+          </button>
+        </div>
       </div>
+
+      {mailboxes.length > 0 && (
+        <div className="mb-2 flex items-center gap-2 text-xs">
+          <span className="text-[var(--muted)]">Von</span>
+          <select
+            value={mailboxId}
+            onChange={(e) => setMailboxId(e.target.value)}
+            disabled={sending || mailboxes.length === 1}
+            title="Aus welchem Postfach senden?"
+            className="flex-1 rounded-lg border border-[var(--border)] bg-transparent px-2 py-1.5 outline-none focus:border-brand-500 disabled:opacity-70"
+          >
+            {mailboxes.map((m) => (
+              <option key={m.id} value={m.id}>
+                Mining Adventure World – {m.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <textarea
         value={body}
@@ -177,25 +240,25 @@ export function ReplyEditor({
         className="w-full resize-y rounded-lg border border-[var(--border)] bg-transparent px-3 py-2 text-sm outline-none focus:border-brand-500"
       />
 
-      {/* Anhänge */}
+      {/* Anhänge – inkl. automatischer KI-Rechnungserkennung pro Datei */}
       {attachments.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="mt-2 flex flex-col gap-2">
           {attachments.map((a) => (
-            <span
-              key={a.id}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs"
-            >
-              <Paperclip className="h-3 w-3 shrink-0" />
-              <span className="max-w-[180px] truncate">{a.fileName}</span>
-              <button
-                type="button"
-                onClick={() => removeAttachment(a.id)}
-                aria-label="Anhang entfernen"
-                className="text-[var(--muted)] hover:text-red-500"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </span>
+            <div key={a.id} className="flex flex-col gap-1.5">
+              <span className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] px-2.5 py-1 text-xs">
+                <Paperclip className="h-3 w-3 shrink-0" />
+                <span className="max-w-[180px] truncate">{a.fileName}</span>
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(a.id)}
+                  aria-label="Anhang entfernen"
+                  className="text-[var(--muted)] hover:text-red-500"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+              <InvoicePanel attachmentId={a.id} />
+            </div>
           ))}
         </div>
       )}

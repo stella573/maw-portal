@@ -3,7 +3,7 @@
 import { useActionState, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Search, Inbox as InboxIcon, Check, RotateCcw, Eye, PenLine } from "lucide-react";
+import { Plus, Search, Inbox as InboxIcon, Check, RotateCcw, Eye, PenLine, Loader2 } from "lucide-react";
 import { createTicket, setTicketStatus, type ActionResult } from "./actions";
 import type {
   InboxMailbox,
@@ -48,6 +48,8 @@ interface Props {
   view: InboxView;
   priority?: TicketPriority;
   search?: string;
+  allTags: { id: string; name: string; color: string }[];
+  tagId?: string;
   canCreate: boolean;
   currentUser: { profileId: string; name: string } | null;
 }
@@ -59,11 +61,16 @@ export function Inbox({
   view,
   priority,
   search,
+  allTags,
+  tagId,
   canCreate,
   currentUser,
 }: Props) {
   const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
+  // Navigation (Tab-/Filter-/Postfachwechsel) als Transition: die aktuelle
+  // Liste bleibt sichtbar, während die neuen Daten laden → kein „Hängen".
+  const [isPending, startTransition] = useTransition();
 
   // Live: Ticket-Änderungen (Status, Zuweisung, neue Vorgänge) sofort spiegeln.
   // RLS filtert serverseitig – wir laden bei einem Event einfach neu.
@@ -93,12 +100,15 @@ export function Inbox({
       view,
       priority,
       q: search,
+      tag: tagId,
       ...patch,
     };
     for (const [k, v] of Object.entries(merged)) {
       if (v) params.set(k, v);
     }
-    router.push(`/maildesk?${params.toString()}`);
+    startTransition(() => {
+      router.push(`/maildesk?${params.toString()}`);
+    });
   }
 
   if (mailboxes.length === 0) {
@@ -159,6 +169,9 @@ export function Inbox({
             </button>
           ))}
         </div>
+        {isPending && (
+          <Loader2 className="h-4 w-4 animate-spin text-[var(--muted)]" aria-label="Lädt" />
+        )}
       </div>
 
       {/* Filterleiste */}
@@ -188,6 +201,20 @@ export function Inbox({
             </option>
           ))}
         </select>
+        {allTags.length > 0 && (
+          <select
+            value={tagId ?? ""}
+            onChange={(e) => updateQuery({ tag: e.target.value || undefined })}
+            className="rounded-lg border border-[var(--border)] bg-transparent px-2 py-2 text-sm outline-none focus:border-brand-500"
+          >
+            <option value="">Alle Tags</option>
+            {allTags.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        )}
         {canCreate && (
           <button
             onClick={() => setShowCreate((s) => !s)}
@@ -205,8 +232,10 @@ export function Inbox({
         />
       )}
 
-      {/* Ticketliste */}
-      <TicketList tickets={tickets} peersByTicket={peersByTicket} />
+      {/* Ticketliste – bleibt während des Wechsels sichtbar (nur gedimmt) */}
+      <div className={isPending ? "pointer-events-none opacity-50 transition-opacity" : "transition-opacity"}>
+        <TicketList tickets={tickets} peersByTicket={peersByTicket} />
+      </div>
     </div>
   );
 }
@@ -296,6 +325,20 @@ function TicketRow({
           {t.preview && (
             <div className="truncate text-xs text-[var(--foreground)]/70">
               {t.preview}
+            </div>
+          )}
+          {t.tags.length > 0 && (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {t.tags.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px]"
+                  style={{ backgroundColor: `${tag.color}22`, color: tag.color }}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                  {tag.name}
+                </span>
+              ))}
             </div>
           )}
           <div className="flex items-center gap-2 truncate text-xs text-[var(--muted)]">

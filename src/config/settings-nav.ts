@@ -4,6 +4,9 @@ import {
   Mailbox,
   ShieldCheck,
   PenLine,
+  Tag,
+  FileText,
+  Plug,
   type LucideIcon,
 } from "lucide-react";
 import type { Permission } from "@/lib/auth/roles";
@@ -53,11 +56,35 @@ export const SETTINGS_NAV: SettingsNavItem[] = [
     description: "Funktions-/Team-Postfächer & Zuweisungen",
   },
   {
+    key: "templates",
+    label: "Antwortvorlagen",
+    href: "/settings/templates",
+    icon: FileText,
+    permission: "templates.manage",
+    description: "Textbausteine für wiederkehrende Antworten",
+  },
+  {
+    key: "tags",
+    label: "Tags / Kategorien",
+    href: "/settings/tags",
+    icon: Tag,
+    permission: "tags.manage",
+    description: "Schlagworte zum Kategorisieren von Tickets",
+  },
+  {
     key: "roles",
     label: "Rechteübersicht",
     href: "/settings/roles",
     icon: ShieldCheck,
     permission: "roles.manage",
     description: "Welche Rolle welche Rechte hat",
+  },
+  {
+    key: "integrations",
+    label: "Integrationen",
+    href: "/settings/integrations",
+    icon: Plug,
+    permission: "integrations.manage",
+    description: "ROLLER & GetMyInvoices anbinden",
   },
 ];

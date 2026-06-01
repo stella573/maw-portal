@@ -88,6 +88,65 @@ export async function createMailbox(
 }
 
 // ----------------------------------------------------------------------------
+// Postfach bearbeiten (Name / Adresse / Standort)
+// ----------------------------------------------------------------------------
+const editSchema = z.object({
+  mailboxId: z.string().uuid(),
+  name: z.string().trim().min(1, "Name ist erforderlich."),
+  email: z.string().email("Ungültige E-Mail-Adresse."),
+  locationId: z.string().uuid().optional().or(z.literal("")),
+});
+
+export async function updateMailbox(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    await guard();
+    const parsed = editSchema.safeParse({
+      mailboxId: formData.get("mailboxId"),
+      name: formData.get("name"),
+      email: formData.get("email"),
+      locationId: formData.get("locationId") ?? "",
+    });
+    if (!parsed.success) {
+      return { ok: false, message: parsed.error.issues[0]?.message ?? "Ungültige Eingabe." };
+    }
+    const input = parsed.data;
+
+    const supabase = await createClient();
+    const { error } = await supabase
+      .from("mailboxes")
+      .update({
+        name: input.name,
+        email: input.email,
+        location_id: input.locationId ? input.locationId : null,
+      })
+      .eq("id", input.mailboxId);
+    if (error) {
+      return {
+        ok: false,
+        message: /duplicate|unique/i.test(error.message)
+          ? "Diese Postfach-Adresse ist bereits vergeben."
+          : error.message,
+      };
+    }
+
+    await logAudit({
+      action: "mailbox.updated",
+      entityType: "mailbox",
+      entityId: input.mailboxId,
+      metadata: { name: input.name, email: input.email },
+    });
+
+    revalidatePath("/settings/mailboxes");
+    return { ok: true, message: "Postfach aktualisiert." };
+  } catch (err) {
+    return forbidden(err) ?? { ok: false, message: "Unerwarteter Fehler." };
+  }
+}
+
+// ----------------------------------------------------------------------------
 // Postfach aktivieren / deaktivieren
 // ----------------------------------------------------------------------------
 export async function setMailboxActive(

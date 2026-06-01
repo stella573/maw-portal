@@ -54,6 +54,24 @@ export async function updateSession(request: NextRequest) {
   const isBypass = BYPASS_PREFIXES.some((p) => pathname.startsWith(p));
   const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
+  // Deaktivierte Konten (z. B. in Personio inaktiv → is_active=false) sofort
+  // aussperren: Session beenden und auf den Login mit Hinweis leiten. Verhindert
+  // zugleich eine Redirect-Schleife Login↔Dashboard.
+  if (user && !isBypass) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("is_active")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (profile && profile.is_active === false) {
+      await supabase.auth.signOut();
+      const url = request.nextUrl.clone();
+      url.pathname = "/login";
+      url.search = "deactivated=1";
+      return NextResponse.redirect(url);
+    }
+  }
+
   // Nicht eingeloggt → Login (außer öffentliche/ausgenommene Pfade).
   if (!user && !isPublic && !isBypass) {
     const url = request.nextUrl.clone();
