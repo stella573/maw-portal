@@ -42,6 +42,7 @@ export type InvoiceJobStatus =
   | "getmyinvoices_upload_started"
   | "getmyinvoices_upload_completed"
   | "getmyinvoices_upload_failed"
+  | "skipped_receipt"
   | "error";
 export type AuditAction =
   | "auth.login"

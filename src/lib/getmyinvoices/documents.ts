@@ -101,21 +101,28 @@ export interface UploadDocumentInput {
 export function buildDocumentPayload(
   input: UploadDocumentInput,
 ): Record<string, unknown> {
+  // Die GMI Accounts-API verwendet snake_case-Felder; document_type ist Pflicht
+  // (gültige Werte sind kleingeschriebene Strings wie "invoice").
   const body: Record<string, unknown> = {
-    documentType: "invoice",
-    fileName: input.fileName,
-    fileContent: input.fileBase64,
+    document_type: "invoice",
+    document_name: input.fileName,
+    file_name: input.fileName,
+    file_content: input.fileBase64,
   };
-  if (input.companyId) body.companyId = input.companyId;
-  if (input.documentNumber) body.documentNumber = input.documentNumber;
-  if (input.documentDate) body.documentDate = input.documentDate;
-  if (input.dueDate) body.documentDueDate = input.dueDate;
-  if (input.netAmount != null) body.netAmount = input.netAmount;
-  if (input.grossAmount != null) body.grossAmount = input.grossAmount;
+  // Lieferant: company_uid ist numerisch.
+  if (input.companyId) {
+    const uid = Number(String(input.companyId).replace(/\D/g, ""));
+    if (Number.isFinite(uid) && uid > 0) body.company_uid = uid;
+  }
+  if (input.documentNumber) body.document_number = input.documentNumber;
+  if (input.documentDate) body.document_date = input.documentDate;
+  if (input.dueDate) body.document_due_date = input.dueDate;
+  if (input.netAmount != null) body.net_amount = input.netAmount;
+  if (input.grossAmount != null) body.gross_amount = input.grossAmount;
   if (input.vat != null) body.vat = input.vat;
   if (input.currency) body.currency = input.currency;
-  if (input.paymentStatus) body.paymentStatus = input.paymentStatus;
-  if (input.comment) body.comment = input.comment;
+  if (input.paymentStatus) body.payment_status = input.paymentStatus;
+  if (input.comment) body.note = input.comment;
   return body;
 }
 

@@ -142,10 +142,38 @@ export async function getJobsForAttachments(
 async function loadAttachment(admin: Admin, attachmentId: string) {
   const { data } = await admin
     .from("attachments")
-    .select("id, storage_path, file_name, content_type")
+    .select("id, storage_path, file_name, content_type, message_id, ticket_id")
     .eq("id", attachmentId)
     .maybeSingle();
   return data;
+}
+
+const RECEIPT_RE = /receipt|beleg|quittung/i;
+const INVOICE_RE = /invoice|rechnung/i;
+
+/**
+ * Prüft, ob dieser Anhang ein Beleg (Receipt) IST und in derselben E-Mail
+ * (bzw. demselben Ticket) zusätzlich eine Rechnung (Invoice) liegt. In diesem
+ * Fall soll nur die Rechnung zu GetMyInvoices – der Beleg wird übersprungen.
+ */
+async function isReceiptWithInvoiceSibling(
+  admin: Admin,
+  attachment: {
+    id: string;
+    file_name: string;
+    message_id: string | null;
+    ticket_id: string | null;
+  },
+): Promise<boolean> {
+  if (!RECEIPT_RE.test(attachment.file_name) || INVOICE_RE.test(attachment.file_name)) {
+    return false;
+  }
+  let query = admin.from("attachments").select("file_name").neq("id", attachment.id);
+  if (attachment.message_id) query = query.eq("message_id", attachment.message_id);
+  else if (attachment.ticket_id) query = query.eq("ticket_id", attachment.ticket_id);
+  else return false;
+  const { data } = await query;
+  return (data ?? []).some((s) => INVOICE_RE.test(s.file_name ?? ""));
 }
 
 async function patchJob(
@@ -257,6 +285,19 @@ export async function runInvoiceProcessing(
   if (!attachment) throw new AttachmentNotFoundError();
 
   await ensureJob(admin, attachmentId);
+
+  // Beleg (Receipt) mit zugehöriger Rechnung in derselben Mail → nur die
+  // Rechnung wird verarbeitet/hochgeladen; der Beleg wird übersprungen.
+  if (await isReceiptWithInvoiceSibling(admin, attachment)) {
+    await patchJob(admin, attachmentId, {
+      status: "skipped_receipt",
+      is_invoice: false,
+      classification: "unclear",
+      supplier_match_reason: "Beleg zur Rechnung – wird nicht zu GetMyInvoices übertragen.",
+      error_message: null,
+    });
+    return result(admin, attachmentId);
+  }
 
   // Cache: bereits verarbeitet und kein force → zurückgeben.
   if (!opts.force) {
@@ -479,9 +520,33 @@ function toVendor(ex: ExtractionResult): ExtractedVendor {
 async function doUpload(
   admin: Admin,
   attachmentId: string,
-  attachment: { storage_path: string; file_name: string; content_type: string | null },
+  attachment: {
+    storage_path: string;
+    file_name: string;
+    content_type: string | null;
+    message_id?: string | null;
+    ticket_id?: string | null;
+  },
   bytesMaybe?: Uint8Array,
 ): Promise<void> {
+  // Belege (Receipts) mit zugehöriger Rechnung nie hochladen.
+  if (
+    attachment.message_id !== undefined &&
+    (await isReceiptWithInvoiceSibling(admin, {
+      id: attachmentId,
+      file_name: attachment.file_name,
+      message_id: attachment.message_id ?? null,
+      ticket_id: attachment.ticket_id ?? null,
+    }))
+  ) {
+    await patchJob(admin, attachmentId, {
+      status: "skipped_receipt",
+      is_invoice: false,
+      supplier_match_reason: "Beleg zur Rechnung – wird nicht zu GetMyInvoices übertragen.",
+    });
+    return;
+  }
+
   const creds = await getGmiCreds();
   if (!creds) {
     await patchJob(admin, attachmentId, {

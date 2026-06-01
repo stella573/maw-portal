@@ -103,6 +103,7 @@ export const STATUS_LABELS: Record<InvoiceJobStatus, string> = {
   getmyinvoices_upload_started: "Wird zu GetMyInvoices hochgeladen …",
   getmyinvoices_upload_completed: "An GetMyInvoices übertragen",
   getmyinvoices_upload_failed: "Übertragung fehlgeschlagen",
+  skipped_receipt: "Beleg – übersprungen (Rechnung wird genutzt)",
   error: "Fehler bei Prüfung",
 };
 
@@ -131,6 +132,7 @@ export function statusBadgeClasses(status: InvoiceJobStatus): string {
       return "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30";
     case "not_invoice":
     case "unsupported_file_type":
+    case "skipped_receipt":
       return "bg-slate-500/10 text-slate-600 dark:text-slate-300 border-slate-500/25";
     case "getmyinvoices_upload_failed":
     case "error":
