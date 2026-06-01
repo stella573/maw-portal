@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { getAnalysesForAttachments } from "@/services/attachments/invoice-analysis";
-import type { AttachmentAnalysis } from "@/lib/ai/invoice-types";
+import { getJobsForAttachments } from "@/services/attachments/invoice-processing";
+import type { InvoiceJob } from "@/lib/ai/invoice-types";
 import type {
   TicketStatus,
   TicketPriority,
@@ -35,8 +35,8 @@ export interface TicketDetailAttachment {
   fileName: string;
   contentType: string | null;
   sizeBytes: number | null;
-  /** KI-Analyse (Rechnungserkennung), falls bereits vorhanden. */
-  analysis: AttachmentAnalysis | null;
+  /** Rechnungsverarbeitungs-Job (KI + GetMyInvoices), falls vorhanden. */
+  job: InvoiceJob | null;
 }
 
 export interface AssignableAgent {
@@ -113,8 +113,8 @@ export async function getTicketDetail(
     .eq("ticket_id", ticketId)
     .order("created_at", { ascending: true });
 
-  // KI-Analysen der Anhänge laden (RLS-gebunden – an Ticket-Sichtbarkeit).
-  const attachmentAnalyses = await getAnalysesForAttachments(
+  // Rechnungs-Jobs der Anhänge laden (RLS-gebunden – an Ticket-Sichtbarkeit).
+  const attachmentJobs = await getJobsForAttachments(
     supabase,
     (attachments ?? []).map((a) => a.id),
   );
@@ -220,7 +220,7 @@ export async function getTicketDetail(
       fileName: a.file_name,
       contentType: a.content_type,
       sizeBytes: a.size_bytes,
-      analysis: attachmentAnalyses.get(a.id) ?? null,
+      job: attachmentJobs.get(a.id) ?? null,
     })),
     assignableAgents,
     tags,

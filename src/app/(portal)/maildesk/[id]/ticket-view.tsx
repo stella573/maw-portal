@@ -21,7 +21,7 @@ import type {
 } from "@/modules/maildesk/services/ticket-detail";
 import type { ReplyTemplate } from "@/modules/maildesk/services/templates";
 import { ReplyEditor } from "./reply-editor";
-import { AttachmentAiBadge } from "@/components/attachments/attachment-ai-badge";
+import { InvoicePanel } from "@/components/attachments/invoice-panel";
 
 export function TicketView({
   ticket,
@@ -530,7 +530,7 @@ function AttachmentList({ items }: { items: TicketDetailAttachment[] }) {
               <span className="text-[var(--muted)]">{formatBytes(a.sizeBytes)}</span>
             )}
           </a>
-          <AttachmentAiBadge attachmentId={a.id} initial={a.analysis} />
+          <InvoicePanel attachmentId={a.id} initial={a.job} />
         </div>
       ))}
     </div>

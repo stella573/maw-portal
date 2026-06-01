@@ -26,8 +26,23 @@ export type InvoiceClassification =
   | "unclear"
   | "unsupported_file_type"
   | "error";
-/** Verarbeitungs-Lebenszyklus einer Anhang-Analyse. */
-export type AttachmentAnalysisStatus = "processing" | "completed" | "error";
+/** Status-Lebenszyklus eines Rechnungsverarbeitungs-Jobs. */
+export type InvoiceJobStatus =
+  | "uploaded"
+  | "ai_check_started"
+  | "unsupported_file_type"
+  | "not_invoice"
+  | "invoice_detected"
+  | "extraction_started"
+  | "extraction_completed"
+  | "supplier_matching_started"
+  | "supplier_matched"
+  | "supplier_match_unclear"
+  | "needs_manual_supplier_review"
+  | "getmyinvoices_upload_started"
+  | "getmyinvoices_upload_completed"
+  | "getmyinvoices_upload_failed"
+  | "error";
 export type AuditAction =
   | "auth.login"
   | "auth.logout"
@@ -660,63 +675,178 @@ export type Database = {
         };
         Relationships: [];
       };
-      attachment_ai_analysis: {
+      invoice_processing_jobs: {
         Row: {
           id: string;
           attachment_id: string;
-          status: AttachmentAnalysisStatus;
+          file_hash: string | null;
+          status: InvoiceJobStatus;
           is_invoice: boolean;
-          confidence: number;
+          invoice_confidence: number;
           classification: InvoiceClassification;
-          reason: string | null;
-          extracted_invoice_number: string | null;
-          extracted_invoice_date: string | null;
-          extracted_vendor_name: string | null;
-          extracted_total_amount: number | null;
-          extracted_currency: string | null;
-          raw_ai_response: Json | null;
+          supplier_match_score: number;
+          matched_supplier_id: string | null;
+          matched_supplier_name: string | null;
+          supplier_match_reason: string | null;
+          manual_supplier_confirmed: boolean;
+          getmyinvoices_document_id: string | null;
+          model_used: string | null;
+          error_message: string | null;
+          raw_claude_response: Json | null;
+          raw_getmyinvoices_response: Json | null;
           created_at: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
           attachment_id: string;
-          status?: AttachmentAnalysisStatus;
+          file_hash?: string | null;
+          status?: InvoiceJobStatus;
           is_invoice?: boolean;
-          confidence?: number;
+          invoice_confidence?: number;
           classification?: InvoiceClassification;
-          reason?: string | null;
-          extracted_invoice_number?: string | null;
-          extracted_invoice_date?: string | null;
-          extracted_vendor_name?: string | null;
-          extracted_total_amount?: number | null;
-          extracted_currency?: string | null;
-          raw_ai_response?: Json | null;
+          supplier_match_score?: number;
+          matched_supplier_id?: string | null;
+          matched_supplier_name?: string | null;
+          supplier_match_reason?: string | null;
+          manual_supplier_confirmed?: boolean;
+          getmyinvoices_document_id?: string | null;
+          model_used?: string | null;
+          error_message?: string | null;
+          raw_claude_response?: Json | null;
+          raw_getmyinvoices_response?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
           attachment_id?: string;
-          status?: AttachmentAnalysisStatus;
+          file_hash?: string | null;
+          status?: InvoiceJobStatus;
           is_invoice?: boolean;
-          confidence?: number;
+          invoice_confidence?: number;
           classification?: InvoiceClassification;
-          reason?: string | null;
-          extracted_invoice_number?: string | null;
-          extracted_invoice_date?: string | null;
-          extracted_vendor_name?: string | null;
-          extracted_total_amount?: number | null;
-          extracted_currency?: string | null;
-          raw_ai_response?: Json | null;
+          supplier_match_score?: number;
+          matched_supplier_id?: string | null;
+          matched_supplier_name?: string | null;
+          supplier_match_reason?: string | null;
+          manual_supplier_confirmed?: boolean;
+          getmyinvoices_document_id?: string | null;
+          model_used?: string | null;
+          error_message?: string | null;
+          raw_claude_response?: Json | null;
+          raw_getmyinvoices_response?: Json | null;
           created_at?: string;
           updated_at?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "attachment_ai_analysis_attachment_id_fkey";
+            foreignKeyName: "invoice_processing_jobs_attachment_id_fkey";
             columns: ["attachment_id"];
             referencedRelation: "attachments";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      extracted_invoice_data: {
+        Row: {
+          id: string;
+          attachment_id: string;
+          invoice_processing_job_id: string;
+          vendor_name: string | null;
+          vendor_address: string | null;
+          vendor_vat_id: string | null;
+          vendor_tax_number: string | null;
+          vendor_iban: string | null;
+          vendor_email: string | null;
+          vendor_website: string | null;
+          vendor_country: string | null;
+          invoice_number: string | null;
+          invoice_date: string | null;
+          service_date: string | null;
+          due_date: string | null;
+          net_amount: number | null;
+          tax_amount: number | null;
+          gross_amount: number | null;
+          currency: string | null;
+          customer_number: string | null;
+          order_reference: string | null;
+          description: string | null;
+          payment_status: string | null;
+          document_language: string | null;
+          line_items: Json | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          attachment_id: string;
+          invoice_processing_job_id: string;
+          vendor_name?: string | null;
+          vendor_address?: string | null;
+          vendor_vat_id?: string | null;
+          vendor_tax_number?: string | null;
+          vendor_iban?: string | null;
+          vendor_email?: string | null;
+          vendor_website?: string | null;
+          vendor_country?: string | null;
+          invoice_number?: string | null;
+          invoice_date?: string | null;
+          service_date?: string | null;
+          due_date?: string | null;
+          net_amount?: number | null;
+          tax_amount?: number | null;
+          gross_amount?: number | null;
+          currency?: string | null;
+          customer_number?: string | null;
+          order_reference?: string | null;
+          description?: string | null;
+          payment_status?: string | null;
+          document_language?: string | null;
+          line_items?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          attachment_id?: string;
+          invoice_processing_job_id?: string;
+          vendor_name?: string | null;
+          vendor_address?: string | null;
+          vendor_vat_id?: string | null;
+          vendor_tax_number?: string | null;
+          vendor_iban?: string | null;
+          vendor_email?: string | null;
+          vendor_website?: string | null;
+          vendor_country?: string | null;
+          invoice_number?: string | null;
+          invoice_date?: string | null;
+          service_date?: string | null;
+          due_date?: string | null;
+          net_amount?: number | null;
+          tax_amount?: number | null;
+          gross_amount?: number | null;
+          currency?: string | null;
+          customer_number?: string | null;
+          order_reference?: string | null;
+          description?: string | null;
+          payment_status?: string | null;
+          document_language?: string | null;
+          line_items?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "extracted_invoice_data_attachment_id_fkey";
+            columns: ["attachment_id"];
+            referencedRelation: "attachments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "extracted_invoice_data_invoice_processing_job_id_fkey";
+            columns: ["invoice_processing_job_id"];
+            referencedRelation: "invoice_processing_jobs";
             referencedColumns: ["id"];
           },
         ];

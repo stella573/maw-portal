@@ -1,15 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
-import { mapAnalysisRow } from "@/services/attachments/invoice-analysis";
-import type { Tables, InvoiceClassification } from "@/types/database";
-import type { AttachmentAnalysis } from "@/lib/ai/invoice-types";
+import { mapJob } from "@/services/attachments/invoice-processing";
+import { isInProgress, type InvoiceJob } from "@/lib/ai/invoice-types";
+import type { Tables } from "@/types/database";
 
 /**
- * Datenquelle für das Rechnungs-Dashboard: alle KI-analysierten Anhänge, die
- * der eingeloggte User sehen darf (RLS), inkl. Ticket-Kontext und Kennzahlen.
+ * Datenquelle für das Rechnungs-Dashboard: alle Verarbeitungs-Jobs, die der
+ * eingeloggte User sehen darf (RLS), inkl. Ticket-Kontext und Kennzahlen.
  */
 
-export interface AnalyzedAttachmentItem {
-  analysis: AttachmentAnalysis;
+export interface InvoiceJobItem {
+  job: InvoiceJob;
   fileName: string;
   contentType: string | null;
   ticketId: string | null;
@@ -20,54 +20,61 @@ export interface AnalyzedAttachmentItem {
 export interface InvoiceDashboardStats {
   total: number;
   invoices: number;
+  uploaded: number;
+  needsReview: number;
   notInvoices: number;
-  unclear: number;
-  unsupported: number;
-  errors: number;
+  failed: number;
   processing: number;
-  /** Summe der erkannten Rechnungsbeträge je Währung. */
   totalsByCurrency: { currency: string; amount: number; count: number }[];
 }
 
 export interface InvoiceDashboardData {
-  items: AnalyzedAttachmentItem[];
+  items: InvoiceJobItem[];
   stats: InvoiceDashboardStats;
 }
 
-type AnalysisRow = Tables<"attachment_ai_analysis">;
+type JobRow = Tables<"invoice_processing_jobs">;
+type ExtractedRow = Tables<"extracted_invoice_data">;
 
-/** Lädt alle sichtbaren Analysen samt Ticket-Kontext (neueste zuerst). */
-export async function getInvoiceDashboard(
-  limit = 200,
-): Promise<InvoiceDashboardData> {
+export async function getInvoiceDashboard(limit = 200): Promise<InvoiceDashboardData> {
   const supabase = await createClient();
 
-  const { data } = await supabase
-    .from("attachment_ai_analysis")
+  const { data: jobs } = await supabase
+    .from("invoice_processing_jobs")
     .select(
-      `id, attachment_id, status, is_invoice, confidence, classification, reason,
-       extracted_invoice_number, extracted_invoice_date, extracted_vendor_name,
-       extracted_total_amount, extracted_currency, raw_ai_response,
-       created_at, updated_at,
-       attachments!inner ( file_name, content_type, ticket_id,
+      `*, attachments!inner ( file_name, content_type, ticket_id,
          tickets ( id, reference, subject ) )`,
     )
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  const items: AnalyzedAttachmentItem[] = (data ?? []).map((row) => {
-    const r = row as unknown as AnalysisRow & {
-      attachments: {
-        file_name: string;
-        content_type: string | null;
-        ticket_id: string | null;
-        tickets: { id: string; reference: string; subject: string } | null;
-      } | null;
-    };
+  const rows = (jobs ?? []) as unknown as (JobRow & {
+    attachments: {
+      file_name: string;
+      content_type: string | null;
+      ticket_id: string | null;
+      tickets: { id: string; reference: string; subject: string } | null;
+    } | null;
+  })[];
+
+  // Extrahierte Daten für die enthaltenen Anhänge laden.
+  const attachmentIds = rows.map((r) => r.attachment_id);
+  const extractedByAtt = new Map<string, ExtractedRow>();
+  if (attachmentIds.length > 0) {
+    const { data: extracted } = await supabase
+      .from("extracted_invoice_data")
+      .select("*")
+      .in("attachment_id", attachmentIds);
+    for (const e of (extracted ?? []) as ExtractedRow[]) {
+      extractedByAtt.set(e.attachment_id, e);
+    }
+  }
+
+  const items: InvoiceJobItem[] = rows.map((r) => {
     const att = r.attachments;
     const ticket = att?.tickets ?? null;
     return {
-      analysis: mapAnalysisRow(r),
+      job: mapJob(r, extractedByAtt.get(r.attachment_id) ?? null),
       fileName: att?.file_name ?? "Anhang",
       contentType: att?.content_type ?? null,
       ticketId: ticket?.id ?? att?.ticket_id ?? null,
@@ -79,41 +86,42 @@ export async function getInvoiceDashboard(
   return { items, stats: computeStats(items) };
 }
 
-function computeStats(items: AnalyzedAttachmentItem[]): InvoiceDashboardStats {
-  const counts: Record<InvoiceClassification, number> = {
-    invoice: 0,
-    not_invoice: 0,
-    unclear: 0,
-    unsupported_file_type: 0,
-    error: 0,
-  };
+function computeStats(items: InvoiceJobItem[]): InvoiceDashboardStats {
+  let invoices = 0;
+  let uploaded = 0;
+  let needsReview = 0;
+  let notInvoices = 0;
+  let failed = 0;
   let processing = 0;
   const totals = new Map<string, { amount: number; count: number }>();
 
-  for (const item of items) {
-    const a = item.analysis;
-    if (a.status === "processing") {
-      processing += 1;
-      continue;
+  for (const { job } of items) {
+    if (isInProgress(job.status)) processing += 1;
+    if (job.status === "getmyinvoices_upload_completed") uploaded += 1;
+    if (job.status === "supplier_match_unclear" || job.status === "needs_manual_supplier_review") {
+      needsReview += 1;
     }
-    counts[a.classification] += 1;
-    if (a.classification === "invoice" && a.totalAmount != null) {
-      const cur = (a.currency || "—").toUpperCase();
-      const prev = totals.get(cur) ?? { amount: 0, count: 0 };
-      totals.set(cur, {
-        amount: prev.amount + a.totalAmount,
-        count: prev.count + 1,
-      });
+    if (job.status === "not_invoice") notInvoices += 1;
+    if (job.status === "getmyinvoices_upload_failed" || job.status === "error") failed += 1;
+
+    if (job.isInvoice) {
+      invoices += 1;
+      const gross = job.extracted?.grossAmount ?? null;
+      if (gross != null) {
+        const cur = (job.extracted?.currency || "—").toUpperCase();
+        const prev = totals.get(cur) ?? { amount: 0, count: 0 };
+        totals.set(cur, { amount: prev.amount + gross, count: prev.count + 1 });
+      }
     }
   }
 
   return {
     total: items.length,
-    invoices: counts.invoice,
-    notInvoices: counts.not_invoice,
-    unclear: counts.unclear,
-    unsupported: counts.unsupported_file_type,
-    errors: counts.error,
+    invoices,
+    uploaded,
+    needsReview,
+    notInvoices,
+    failed,
     processing,
     totalsByCurrency: Array.from(totals.entries())
       .map(([currency, v]) => ({ currency, ...v }))

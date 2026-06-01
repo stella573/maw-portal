@@ -4,24 +4,37 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Paperclip, RefreshCw, ExternalLink, ReceiptText } from "lucide-react";
-import { AttachmentAiBadge } from "@/components/attachments/attachment-ai-badge";
-import {
-  CLASSIFICATION_LABELS,
-  formatAmount,
-  type InvoiceClassification,
-} from "@/lib/ai/invoice-types";
-import type { InvoiceDashboardData } from "@/modules/maildesk/services/invoices";
+import { InvoicePanel } from "@/components/attachments/invoice-panel";
+import { formatAmount, isInProgress, type InvoiceJobStatus } from "@/lib/ai/invoice-types";
+import type { InvoiceDashboardData, InvoiceJobItem } from "@/modules/maildesk/services/invoices";
 
-type Filter = "all" | InvoiceClassification;
+type Filter = "all" | "invoice" | "needs_review" | "uploaded" | "not_invoice" | "failed";
 
-const FILTER_ORDER: Filter[] = [
-  "all",
-  "invoice",
-  "not_invoice",
-  "unclear",
-  "unsupported_file_type",
-  "error",
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: "all", label: "Alle" },
+  { key: "invoice", label: "Rechnungen" },
+  { key: "needs_review", label: "Prüfung nötig" },
+  { key: "uploaded", label: "An GetMyInvoices" },
+  { key: "not_invoice", label: "Keine Rechnung" },
+  { key: "failed", label: "Fehler" },
 ];
+
+function matchesFilter(status: InvoiceJobStatus, isInvoice: boolean, f: Filter): boolean {
+  switch (f) {
+    case "all":
+      return true;
+    case "invoice":
+      return isInvoice;
+    case "needs_review":
+      return status === "supplier_match_unclear" || status === "needs_manual_supplier_review";
+    case "uploaded":
+      return status === "getmyinvoices_upload_completed";
+    case "not_invoice":
+      return status === "not_invoice";
+    case "failed":
+      return status === "getmyinvoices_upload_failed" || status === "error";
+  }
+}
 
 export function InvoicesView({ data }: { data: InvoiceDashboardData }) {
   const router = useRouter();
@@ -29,26 +42,21 @@ export function InvoicesView({ data }: { data: InvoiceDashboardData }) {
   const { items, stats } = data;
 
   const filtered = useMemo(
-    () =>
-      filter === "all"
-        ? items
-        : items.filter((i) => i.analysis.classification === filter),
+    () => items.filter((i) => matchesFilter(i.job.status, i.job.isInvoice, filter)),
     [items, filter],
   );
 
   return (
     <div className="space-y-6">
-      {/* Kennzahlen */}
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Analysiert" value={stats.total} />
-        <StatCard label="Rechnungen" value={stats.invoices} accent="emerald" />
-        <StatCard label="Keine Rechnung" value={stats.notInvoices} />
-        <StatCard label="Unklar" value={stats.unclear} accent="amber" />
-        <StatCard label="Fehler" value={stats.errors} accent="red" />
-        <StatCard label="In Prüfung" value={stats.processing} accent="brand" />
+        <StatCard label="Rechnungen" value={stats.invoices} accent="sky" />
+        <StatCard label="An GetMyInvoices" value={stats.uploaded} accent="emerald" />
+        <StatCard label="Prüfung nötig" value={stats.needsReview} accent="amber" />
+        <StatCard label="Fehler" value={stats.failed} accent="red" />
+        <StatCard label="In Arbeit" value={stats.processing} accent="brand" />
       </div>
 
-      {/* Summen je Währung (nur erkannte Rechnungen) */}
       {stats.totalsByCurrency.length > 0 && (
         <div className="flex flex-wrap gap-3">
           {stats.totalsByCurrency.map((t) => (
@@ -68,21 +76,20 @@ export function InvoicesView({ data }: { data: InvoiceDashboardData }) {
         </div>
       )}
 
-      {/* Filter + Aktualisieren */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1.5">
-          {FILTER_ORDER.map((f) => (
+          {FILTERS.map((f) => (
             <button
-              key={f}
+              key={f.key}
               type="button"
-              onClick={() => setFilter(f)}
+              onClick={() => setFilter(f.key)}
               className={`rounded-full border px-3 py-1 text-xs transition ${
-                filter === f
+                filter === f.key
                   ? "border-brand-500 bg-brand-600/10 font-medium text-brand-700 dark:text-brand-200"
                   : "border-[var(--border)] text-[var(--muted)] hover:bg-[var(--background)]"
               }`}
             >
-              {f === "all" ? "Alle" : CLASSIFICATION_LABELS[f]}
+              {f.label}
             </button>
           ))}
         </div>
@@ -95,60 +102,58 @@ export function InvoicesView({ data }: { data: InvoiceDashboardData }) {
         </button>
       </div>
 
-      {/* Liste */}
       {filtered.length === 0 ? (
         <p className="rounded-xl border border-dashed border-[var(--border)] bg-[var(--surface)] p-8 text-center text-sm text-[var(--muted)]">
           {items.length === 0
-            ? "Noch keine analysierten Anhänge. Sobald Anhänge hochgeladen oder per E-Mail empfangen werden, erscheinen sie hier."
+            ? "Noch keine verarbeiteten Anhänge. Sobald Anhänge hochgeladen oder per E-Mail empfangen werden, erscheinen sie hier."
             : "Keine Einträge für diesen Filter."}
         </p>
       ) : (
         <div className="space-y-2.5">
           {filtered.map((item) => (
-            <div
-              key={item.analysis.id}
-              className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:flex-row sm:items-start sm:justify-between"
-            >
-              <div className="min-w-0 flex-1">
-                <a
-                  href={`/api/mail/attachment/${item.analysis.attachmentId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex max-w-full items-center gap-1.5 text-sm font-medium transition hover:text-brand-600"
-                >
-                  <Paperclip className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{item.fileName}</span>
-                </a>
-                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--muted)]">
-                  {item.ticketReference && item.ticketId && (
-                    <Link
-                      href={`/maildesk/${item.ticketId}` as never}
-                      className="inline-flex items-center gap-1 hover:text-brand-600"
-                    >
-                      {item.ticketReference}
-                      <ExternalLink className="h-3 w-3" />
-                    </Link>
-                  )}
-                  {item.ticketSubject && (
-                    <span className="truncate">· {item.ticketSubject}</span>
-                  )}
-                  <span>· {formatDate(item.analysis.createdAt)}</span>
-                </div>
-              </div>
-
-              <div className="sm:w-[320px] sm:shrink-0">
-                <AttachmentAiBadge
-                  attachmentId={item.analysis.attachmentId}
-                  initial={item.analysis}
-                  // Noch nicht abgeschlossene (z. B. per Webhook vorgemerkte)
-                  // Analysen beim Anzeigen automatisch abschließen.
-                  autostart={item.analysis.status === "processing"}
-                />
-              </div>
-            </div>
+            <InvoiceRow key={item.job.id} item={item} />
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function InvoiceRow({ item }: { item: InvoiceJobItem }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4 lg:flex-row lg:items-start lg:justify-between">
+      <div className="min-w-0 flex-1">
+        <a
+          href={`/api/mail/attachment/${item.job.attachmentId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex max-w-full items-center gap-1.5 text-sm font-medium transition hover:text-brand-600"
+        >
+          <Paperclip className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{item.fileName}</span>
+        </a>
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--muted)]">
+          {item.ticketReference && item.ticketId && (
+            <Link
+              href={`/maildesk/${item.ticketId}` as never}
+              className="inline-flex items-center gap-1 hover:text-brand-600"
+            >
+              {item.ticketReference}
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          )}
+          {item.ticketSubject && <span className="truncate">· {item.ticketSubject}</span>}
+          <span>· {formatDate(item.job.createdAt)}</span>
+        </div>
+      </div>
+
+      <div className="lg:w-[360px] lg:shrink-0">
+        <InvoicePanel
+          attachmentId={item.job.attachmentId}
+          initial={item.job}
+          autostart={isInProgress(item.job.status)}
+        />
+      </div>
     </div>
   );
 }
@@ -160,18 +165,20 @@ function StatCard({
 }: {
   label: string;
   value: number;
-  accent?: "emerald" | "amber" | "red" | "brand";
+  accent?: "sky" | "emerald" | "amber" | "red" | "brand";
 }) {
   const accentText =
-    accent === "emerald"
-      ? "text-emerald-600 dark:text-emerald-400"
-      : accent === "amber"
-        ? "text-amber-600 dark:text-amber-400"
-        : accent === "red"
-          ? "text-red-600 dark:text-red-400"
-          : accent === "brand"
-            ? "text-brand-600 dark:text-brand-300"
-            : "";
+    accent === "sky"
+      ? "text-sky-600 dark:text-sky-400"
+      : accent === "emerald"
+        ? "text-emerald-600 dark:text-emerald-400"
+        : accent === "amber"
+          ? "text-amber-600 dark:text-amber-400"
+          : accent === "red"
+            ? "text-red-600 dark:text-red-400"
+            : accent === "brand"
+              ? "text-brand-600 dark:text-brand-300"
+              : "";
   return (
     <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-4">
       <div className="text-xs text-[var(--muted)]">{label}</div>

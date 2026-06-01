@@ -318,20 +318,20 @@ export async function POST(request: NextRequest) {
           .select("id")
           .single();
 
-        // KI-Rechnungserkennung für unterstützte Dateitypen vormerken. Der
-        // eigentliche (langsame) KI-Aufruf wird hier BEWUSST NICHT abgewartet –
-        // das würde den Webhook verzögern und Resend-Retries (→ Doppel-Tickets)
-        // riskieren. Stattdessen markieren wir den Anhang als "processing"; die
-        // Analyse wird beim ersten Ansehen (Ticket/Dashboard) automatisch
-        // abgeschlossen.
+        // Rechnungsverarbeitung für unterstützte Dateitypen vormerken. Der
+        // eigentliche (langsame) KI-/GMI-Ablauf wird hier BEWUSST NICHT
+        // abgewartet – das würde den Webhook verzögern und Resend-Retries
+        // (→ Doppel-Tickets) riskieren. Stattdessen legen wir einen Job an
+        // (Status "uploaded"); die Verarbeitung wird beim ersten Ansehen
+        // (Ticket/Dashboard) automatisch gestartet.
         if (
           insertedAtt &&
           isSupportedAttachment(att.filename, att.contentType)
         ) {
           await supabase
-            .from("attachment_ai_analysis")
+            .from("invoice_processing_jobs")
             .upsert(
-              { attachment_id: insertedAtt.id, status: "processing" },
+              { attachment_id: insertedAtt.id, status: "uploaded" },
               { onConflict: "attachment_id" },
             );
         }

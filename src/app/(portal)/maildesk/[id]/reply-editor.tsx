@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles, Send, Paperclip, X, FileText } from "lucide-react";
 import type { ReplyTemplate } from "@/modules/maildesk/services/templates";
-import { AttachmentAiBadge } from "@/components/attachments/attachment-ai-badge";
+import { InvoicePanel } from "@/components/attachments/invoice-panel";
 
 interface PendingAttachment {
   id: string;
@@ -257,7 +257,7 @@ export function ReplyEditor({
                   <X className="h-3 w-3" />
                 </button>
               </span>
-              <AttachmentAiBadge attachmentId={a.id} />
+              <InvoicePanel attachmentId={a.id} />
             </div>
           ))}
         </div>
