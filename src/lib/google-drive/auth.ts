@@ -12,9 +12,10 @@ import { getServerEnv } from "@/lib/env";
  * Läuft ausschließlich serverseitig – der Private Key gelangt nie in den Client.
  */
 
-// Breiter Drive-Scope: nötig, um bestehende Ordner zu finden/wiederzuverwenden
-// und Dateien später umsortieren (verschieben) zu können.
-const SCOPE = "https://www.googleapis.com/auth/drive";
+// Minimaler Scope: die App verwaltet ausschließlich selbst erstellte Dateien
+// und Ordner. Bereits vorhandene Fremd-Dateien sind damit NICHT sicht-/
+// verschiebbar – dafür wäre der breitere `auth/drive`-Scope nötig.
+const SCOPE = "https://www.googleapis.com/auth/drive.file";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
 interface ServiceAccount {
