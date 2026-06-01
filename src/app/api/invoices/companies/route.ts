@@ -37,6 +37,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: true, configured, candidates });
   } catch (err) {
     console.error("[invoices/companies]", err);
-    return NextResponse.json({ error: "Lieferanten konnten nicht geladen werden" }, { status: 500 });
+    const detail = err instanceof Error ? err.message.slice(0, 300) : "";
+    return NextResponse.json(
+      {
+        error: detail
+          ? `Lieferanten konnten nicht geladen werden: ${detail}`
+          : "Lieferanten konnten nicht geladen werden",
+      },
+      { status: 500 },
+    );
   }
 }

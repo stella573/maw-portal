@@ -58,9 +58,20 @@ function normalizeCompany(raw: unknown): GmiCompany | null {
   };
 }
 
-/** Lädt die Companies/Lieferanten aus GetMyInvoices (defensiv geparst). */
+/**
+ * Lädt die Companies/Lieferanten aus GetMyInvoices (defensiv geparst).
+ *
+ * Die GMI Accounts-API nutzt Action-Endpunkte: Companies werden per
+ * `POST listCompanies` geladen (kein `GET companies`). Als Fallback wird der
+ * REST-Stil versucht, falls die API-Version abweicht.
+ */
 export async function listCompanies(creds: GmiCreds): Promise<GmiCompany[]> {
-  const json = await gmiRequest<unknown>(creds, "companies");
+  let json: unknown;
+  try {
+    json = await gmiRequest<unknown>(creds, "listCompanies", { method: "POST", body: {} });
+  } catch {
+    json = await gmiRequest<unknown>(creds, "companies");
+  }
   const list = extractList(json);
   return list
     .map(normalizeCompany)
@@ -72,7 +83,7 @@ function extractList(json: unknown): unknown[] {
   if (Array.isArray(json)) return json;
   if (json && typeof json === "object") {
     const o = json as Record<string, unknown>;
-    for (const key of ["companies", "data", "items", "results", "result"]) {
+    for (const key of ["records", "companies", "data", "items", "results", "result"]) {
       if (Array.isArray(o[key])) return o[key] as unknown[];
     }
   }
