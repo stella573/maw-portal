@@ -1,5 +1,5 @@
 import "server-only";
-import { gmiRequest, type GmiCreds } from "@/lib/getmyinvoices/client";
+import { gmiRequest, GmiHttpError, type GmiCreds } from "@/lib/getmyinvoices/client";
 
 /**
  * GetMyInvoices: Companies (Lieferanten) laden und Dokumente (Rechnungen)
@@ -141,16 +141,50 @@ export function buildDocumentPayload(
 export interface UploadDocumentResult {
   documentId: string | null;
   raw: unknown;
+  /** Dokument war bereits im Konto vorhanden (GMI-Duplikaterkennung). */
+  alreadyExists?: boolean;
 }
 
-/** Lädt ein Dokument (Rechnung) zu GetMyInvoices hoch. */
+/**
+ * Lädt ein Dokument (Rechnung) zu GetMyInvoices hoch.
+ *
+ * Idempotent: Erkennt GMI das Dokument als Duplikat (Code 127
+ * "Document already exists"), wird das als Erfolg gewertet und die vorhandene
+ * `duplicate_invoice_id` als Dokument-ID übernommen.
+ */
 export async function uploadDocument(
   creds: GmiCreds,
   input: UploadDocumentInput,
 ): Promise<UploadDocumentResult> {
   const body = buildDocumentPayload(input);
-  const json = await gmiRequest<unknown>(creds, "documents", { method: "POST", body });
-  return { documentId: extractDocumentId(json), raw: json };
+  try {
+    const json = await gmiRequest<unknown>(creds, "documents", { method: "POST", body });
+    return { documentId: extractDocumentId(json), raw: json };
+  } catch (err) {
+    if (err instanceof GmiHttpError) {
+      const dup = findDuplicateId(err.body);
+      if (dup != null) {
+        return { documentId: String(dup), raw: err.body, alreadyExists: true };
+      }
+    }
+    throw err;
+  }
+}
+
+/** Sucht in einer GMI-Fehlerantwort die duplicate_invoice_id (Code 127). */
+function findDuplicateId(body: unknown): string | number | null {
+  if (!body || typeof body !== "object") return null;
+  const errors = (body as Record<string, unknown>).errors;
+  if (!Array.isArray(errors)) return null;
+  for (const e of errors) {
+    const o = e as Record<string, unknown>;
+    if (o.code === 127 || /already exists/i.test(String(o.detail ?? ""))) {
+      const dup = o.duplicate_invoice_id ?? o.duplicateInvoiceId;
+      if (typeof dup === "string" || typeof dup === "number") return dup;
+      return "exists";
+    }
+  }
+  return null;
 }
 
 function extractDocumentId(json: unknown): string | null {

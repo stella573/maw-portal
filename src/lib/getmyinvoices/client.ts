@@ -20,6 +20,18 @@ export interface GmiCreds {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Strukturierter HTTP-Fehler der GMI-API (mit Status + geparstem Body). */
+export class GmiHttpError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly body: unknown,
+  ) {
+    super(message);
+    this.name = "GmiHttpError";
+  }
+}
+
 /** Stellt sicher, dass die Account-Kennung als G-{Nummer} im User-Agent steht. */
 function normalizeAccountId(raw: string): string {
   const v = (raw ?? "").trim();
@@ -67,7 +79,17 @@ export async function gmiRequest<T = unknown>(
 
     const text = await res.text().catch(() => "");
     if (!res.ok) {
-      throw new Error(`GetMyInvoices ${method} ${path} → HTTP ${res.status} ${text.slice(0, 200)}`);
+      let body: unknown = text;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch {
+        /* kein JSON – Rohtext behalten */
+      }
+      throw new GmiHttpError(
+        `GetMyInvoices ${method} ${path} → HTTP ${res.status} ${text.slice(0, 300)}`,
+        res.status,
+        body,
+      );
     }
     if (!text) return undefined as T;
     try {
