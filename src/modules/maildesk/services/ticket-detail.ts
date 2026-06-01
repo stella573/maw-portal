@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getJobsForAttachments } from "@/services/attachments/invoice-processing";
-import type { InvoiceJob } from "@/lib/ai/invoice-types";
+import { getDriveRecordsForAttachments } from "@/services/attachments/google-drive-storage";
+import type { InvoiceJob, DriveRecord } from "@/lib/ai/invoice-types";
 import type {
   TicketStatus,
   TicketPriority,
@@ -37,6 +38,8 @@ export interface TicketDetailAttachment {
   sizeBytes: number | null;
   /** Rechnungsverarbeitungs-Job (KI + GetMyInvoices), falls vorhanden. */
   job: InvoiceJob | null;
+  /** Google-Drive-Ablage, falls vorhanden. */
+  drive: DriveRecord | null;
 }
 
 export interface AssignableAgent {
@@ -113,11 +116,12 @@ export async function getTicketDetail(
     .eq("ticket_id", ticketId)
     .order("created_at", { ascending: true });
 
-  // Rechnungs-Jobs der Anhänge laden (RLS-gebunden – an Ticket-Sichtbarkeit).
-  const attachmentJobs = await getJobsForAttachments(
-    supabase,
-    (attachments ?? []).map((a) => a.id),
-  );
+  // Rechnungs-Jobs + Drive-Ablagen der Anhänge laden (RLS-gebunden).
+  const attachmentIds = (attachments ?? []).map((a) => a.id);
+  const [attachmentJobs, driveRecords] = await Promise.all([
+    getJobsForAttachments(supabase, attachmentIds),
+    getDriveRecordsForAttachments(supabase, attachmentIds),
+  ]);
 
   // Tags dieses Tickets + gesamter Tag-Katalog (für die Auswahl).
   const [{ data: tagLinks }, { data: tagCatalog }] = await Promise.all([
@@ -221,6 +225,7 @@ export async function getTicketDetail(
       contentType: a.content_type,
       sizeBytes: a.size_bytes,
       job: attachmentJobs.get(a.id) ?? null,
+      drive: driveRecords.get(a.id) ?? null,
     })),
     assignableAgents,
     tags,

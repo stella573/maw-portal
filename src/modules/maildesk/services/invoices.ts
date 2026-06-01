@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { mapJob } from "@/services/attachments/invoice-processing";
-import { isInProgress, type InvoiceJob } from "@/lib/ai/invoice-types";
+import { getDriveRecordsForAttachments } from "@/services/attachments/google-drive-storage";
+import { isInProgress, type InvoiceJob, type DriveRecord } from "@/lib/ai/invoice-types";
 import type { Tables } from "@/types/database";
 
 /**
@@ -10,6 +11,7 @@ import type { Tables } from "@/types/database";
 
 export interface InvoiceJobItem {
   job: InvoiceJob;
+  drive: DriveRecord | null;
   fileName: string;
   contentType: string | null;
   ticketId: string | null;
@@ -70,11 +72,14 @@ export async function getInvoiceDashboard(limit = 200): Promise<InvoiceDashboard
     }
   }
 
+  const driveByAtt = await getDriveRecordsForAttachments(supabase, attachmentIds);
+
   const items: InvoiceJobItem[] = rows.map((r) => {
     const att = r.attachments;
     const ticket = att?.tickets ?? null;
     return {
       job: mapJob(r, extractedByAtt.get(r.attachment_id) ?? null),
+      drive: driveByAtt.get(r.attachment_id) ?? null,
       fileName: att?.file_name ?? "Anhang",
       contentType: att?.content_type ?? null,
       ticketId: ticket?.id ?? att?.ticket_id ?? null,

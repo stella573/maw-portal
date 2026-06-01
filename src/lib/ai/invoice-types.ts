@@ -1,9 +1,64 @@
 import type {
   InvoiceClassification,
   InvoiceJobStatus,
+  GoogleDriveUploadStatus,
+  GoogleDriveStorageCategory,
 } from "@/types/database";
 
-export type { InvoiceClassification, InvoiceJobStatus };
+export type {
+  InvoiceClassification,
+  InvoiceJobStatus,
+  GoogleDriveUploadStatus,
+  GoogleDriveStorageCategory,
+};
+
+/** Aufbereiteter Google-Drive-Ablagesatz (camelCase) für die UI. */
+export interface DriveRecord {
+  attachmentId: string;
+  status: GoogleDriveUploadStatus;
+  category: GoogleDriveStorageCategory;
+  path: string | null;
+  storedFilename: string | null;
+  webViewLink: string | null;
+  fileId: string | null;
+  errorMessage: string | null;
+  updatedAt: string;
+}
+
+/** Statustext der Google-Drive-Ablage (für die UI). */
+export const DRIVE_STATUS_LABELS: Record<GoogleDriveUploadStatus, string> = {
+  pending: "Drive-Ablage ausstehend",
+  folder_creation_started: "Drive-Ordner wird vorbereitet",
+  folder_ready: "Drive-Ordner wird vorbereitet",
+  upload_started: "Wird in Google Drive gespeichert",
+  uploaded: "In Google Drive gespeichert",
+  duplicate_skipped: "Duplikat erkannt, bestehende Datei verwendet",
+  failed: "Drive-Ablage fehlgeschlagen",
+};
+
+/** Tailwind-Badge-Klassen je Drive-Status. */
+export function driveBadgeClasses(status: GoogleDriveUploadStatus): string {
+  switch (status) {
+    case "uploaded":
+      return "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30";
+    case "duplicate_skipped":
+      return "bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30";
+    case "failed":
+      return "bg-red-500/15 text-red-600 dark:text-red-300 border-red-500/30";
+    default:
+      return "bg-brand-500/10 text-brand-600 dark:text-brand-300 border-brand-500/30";
+  }
+}
+
+/** Laufende Drive-Status (Spinner). */
+export function driveInProgress(status: GoogleDriveUploadStatus): boolean {
+  return (
+    status === "pending" ||
+    status === "folder_creation_started" ||
+    status === "folder_ready" ||
+    status === "upload_started"
+  );
+}
 
 /**
  * Client-sichere Typen, Labels und Helfer rund um die Rechnungsverarbeitung.

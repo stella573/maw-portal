@@ -44,6 +44,23 @@ export type InvoiceJobStatus =
   | "getmyinvoices_upload_failed"
   | "skipped_receipt"
   | "error";
+/** Ablage-Kategorie in Google Drive. */
+export type GoogleDriveStorageCategory =
+  | "invoice"
+  | "invoice_supplier_unclear"
+  | "not_invoice"
+  | "unclear"
+  | "unsupported_file_type"
+  | "error";
+/** Status der Google-Drive-Ablage. */
+export type GoogleDriveUploadStatus =
+  | "pending"
+  | "folder_creation_started"
+  | "folder_ready"
+  | "upload_started"
+  | "uploaded"
+  | "duplicate_skipped"
+  | "failed";
 export type AuditAction =
   | "auth.login"
   | "auth.logout"
@@ -851,6 +868,73 @@ export type Database = {
             foreignKeyName: "extracted_invoice_data_invoice_processing_job_id_fkey";
             columns: ["invoice_processing_job_id"];
             referencedRelation: "invoice_processing_jobs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      google_drive_storage_records: {
+        Row: {
+          id: string;
+          attachment_id: string;
+          invoice_processing_job_id: string | null;
+          file_hash: string | null;
+          original_filename: string | null;
+          stored_filename: string | null;
+          mime_type: string | null;
+          google_drive_file_id: string | null;
+          google_drive_folder_id: string | null;
+          google_drive_web_view_link: string | null;
+          google_drive_path: string | null;
+          storage_category: GoogleDriveStorageCategory;
+          upload_status: GoogleDriveUploadStatus;
+          error_message: string | null;
+          raw_google_drive_response: Json | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          attachment_id: string;
+          invoice_processing_job_id?: string | null;
+          file_hash?: string | null;
+          original_filename?: string | null;
+          stored_filename?: string | null;
+          mime_type?: string | null;
+          google_drive_file_id?: string | null;
+          google_drive_folder_id?: string | null;
+          google_drive_web_view_link?: string | null;
+          google_drive_path?: string | null;
+          storage_category?: GoogleDriveStorageCategory;
+          upload_status?: GoogleDriveUploadStatus;
+          error_message?: string | null;
+          raw_google_drive_response?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          attachment_id?: string;
+          invoice_processing_job_id?: string | null;
+          file_hash?: string | null;
+          original_filename?: string | null;
+          stored_filename?: string | null;
+          mime_type?: string | null;
+          google_drive_file_id?: string | null;
+          google_drive_folder_id?: string | null;
+          google_drive_web_view_link?: string | null;
+          google_drive_path?: string | null;
+          storage_category?: GoogleDriveStorageCategory;
+          upload_status?: GoogleDriveUploadStatus;
+          error_message?: string | null;
+          raw_google_drive_response?: Json | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "google_drive_storage_records_attachment_id_fkey";
+            columns: ["attachment_id"];
+            referencedRelation: "attachments";
             referencedColumns: ["id"];
           },
         ];

@@ -47,6 +47,13 @@ const serverSchema = z.object({
   // Schaltet den automatischen Upload zu GetMyInvoices frei. Aus Sicherheits-
   // gründen serverseitig steuerbar (Werte: "true"/"1" aktivieren).
   GETMYINVOICES_AUTO_UPLOAD: z.string().optional(),
+  // Google Drive (serverseitige Ablage). Service-Account-JSON als String,
+  // Ziel-Root-Ordner und optionale Domain-Wide-Delegation. Alles optional, damit
+  // Build/Start ohne diese Werte nicht bricht – die Ablage meldet zur Laufzeit
+  // klar, wenn sie fehlen.
+  GOOGLE_SERVICE_ACCOUNT_KEY: z.string().min(1).optional(),
+  GOOGLE_DRIVE_ROOT_FOLDER_ID: z.string().min(1).optional(),
+  GOOGLE_DRIVE_IMPERSONATED_USER_EMAIL: z.string().email().optional(),
   // Personio-Integration (Mitarbeiter-Sync). Optional, damit Build/Start ohne
   // diese Werte nicht bricht – der Sync meldet zur Laufzeit klar, wenn sie fehlen.
   PERSONIO_CLIENT_ID: z.string().min(1).optional(),
@@ -125,6 +132,9 @@ export function getServerEnv() {
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL,
     GETMYINVOICES_AUTO_UPLOAD: process.env.GETMYINVOICES_AUTO_UPLOAD,
+    GOOGLE_SERVICE_ACCOUNT_KEY: process.env.GOOGLE_SERVICE_ACCOUNT_KEY,
+    GOOGLE_DRIVE_ROOT_FOLDER_ID: process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID,
+    GOOGLE_DRIVE_IMPERSONATED_USER_EMAIL: process.env.GOOGLE_DRIVE_IMPERSONATED_USER_EMAIL,
     RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
     PERSONIO_CLIENT_ID: process.env.PERSONIO_CLIENT_ID,
     PERSONIO_CLIENT_SECRET: process.env.PERSONIO_CLIENT_SECRET,

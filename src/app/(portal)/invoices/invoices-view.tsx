@@ -151,6 +151,7 @@ function InvoiceRow({ item }: { item: InvoiceJobItem }) {
         <InvoicePanel
           attachmentId={item.job.attachmentId}
           initial={item.job}
+          initialDrive={item.drive}
           autostart={isInProgress(item.job.status)}
         />
       </div>

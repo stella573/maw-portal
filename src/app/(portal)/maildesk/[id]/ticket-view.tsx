@@ -530,7 +530,7 @@ function AttachmentList({ items }: { items: TicketDetailAttachment[] }) {
               <span className="text-[var(--muted)]">{formatBytes(a.sizeBytes)}</span>
             )}
           </a>
-          <InvoicePanel attachmentId={a.id} initial={a.job} />
+          <InvoicePanel attachmentId={a.id} initial={a.job} initialDrive={a.drive} />
         </div>
       ))}
     </div>

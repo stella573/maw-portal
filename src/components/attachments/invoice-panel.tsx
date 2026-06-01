@@ -13,6 +13,9 @@ import {
   Users,
   RefreshCw,
   CheckCircle2,
+  HardDrive,
+  FolderInput,
+  ExternalLink,
 } from "lucide-react";
 import {
   jobLabel,
@@ -21,9 +24,13 @@ import {
   canUploadToGmi,
   formatAmount,
   formatInvoiceDate,
+  DRIVE_STATUS_LABELS,
+  driveBadgeClasses,
+  driveInProgress,
   type InvoiceJob,
   type InvoiceJobStatus,
   type SupplierCandidate,
+  type DriveRecord,
 } from "@/lib/ai/invoice-types";
 
 /**
@@ -36,10 +43,12 @@ import {
 export function InvoicePanel({
   attachmentId,
   initial = null,
+  initialDrive = null,
   autostart = true,
 }: {
   attachmentId: string;
   initial?: InvoiceJob | null;
+  initialDrive?: DriveRecord | null;
   autostart?: boolean;
 }) {
   const [job, setJob] = useState<InvoiceJob | null>(initial);
@@ -48,6 +57,31 @@ export function InvoicePanel({
   const [candidates, setCandidates] = useState<SupplierCandidate[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const startedRef = useRef(false);
+
+  // Google-Drive-Ablage (eigenständig, nicht-blockierend).
+  const [drive, setDrive] = useState<DriveRecord | null>(initialDrive);
+  const [driveBusy, setDriveBusy] = useState(false);
+  const driveStartedRef = useRef(false);
+
+  const callDrive = useCallback(
+    async (url: string, body: Record<string, unknown>) => {
+      setDriveBusy(true);
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.record) setDrive(data.record as DriveRecord);
+      } catch {
+        /* Drive-Fehler blockieren die übrige Verarbeitung nicht */
+      } finally {
+        setDriveBusy(false);
+      }
+    },
+    [],
+  );
 
   const call = useCallback(
     async (
@@ -94,6 +128,18 @@ export function InvoicePanel({
       void process(false);
     }
   }, [autostart, job, process]);
+
+  // Drive-Ablage automatisch starten, sobald die Verarbeitung abgeschlossen ist
+  // (damit Kategorie/Lieferant/Datum für die Sortierung feststehen).
+  useEffect(() => {
+    if (driveStartedRef.current) return;
+    const jobReady = !!job && !isInProgress(job.status);
+    const driveNeedsRun = !drive || drive.status === "pending";
+    if (autostart && jobReady && driveNeedsRun) {
+      driveStartedRef.current = true;
+      void callDrive("/api/invoices/drive", { attachmentId });
+    }
+  }, [autostart, job, drive, attachmentId, callDrive]);
 
   async function uploadGmi() {
     setBusy("upload");
@@ -262,6 +308,15 @@ export function InvoicePanel({
         </div>
       )}
 
+      {/* Google-Drive-Ablage */}
+      <DriveSection
+        attachmentId={attachmentId}
+        drive={drive}
+        busy={driveBusy}
+        onRetry={() => callDrive("/api/invoices/drive", { attachmentId, force: true })}
+        onResort={() => callDrive("/api/invoices/drive/resort", { attachmentId })}
+      />
+
       {/* Lieferanten-Auswahl */}
       {pickerOpen && (
         <div className="rounded-lg border border-[var(--border)] bg-[var(--background)] p-2.5">
@@ -318,6 +373,84 @@ function Detail({ label, value }: { label: string; value: string | null }) {
     <div className="flex justify-between gap-2">
       <dt className="text-[var(--muted)]">{label}</dt>
       <dd className="truncate font-medium">{value}</dd>
+    </div>
+  );
+}
+
+/** Google-Drive-Ablage: Status, Pfad und Aktionen. */
+function DriveSection({
+  drive,
+  busy,
+  onRetry,
+  onResort,
+}: {
+  attachmentId: string;
+  drive: DriveRecord | null;
+  busy: boolean;
+  onRetry: () => void;
+  onResort: () => void;
+}) {
+  const status = drive?.status ?? "pending";
+  const pending = busy || driveInProgress(status);
+  const done = status === "uploaded" || status === "duplicate_skipped";
+
+  return (
+    <div className="flex flex-col gap-1 border-t border-[var(--border)] pt-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
+            pending
+              ? "bg-brand-500/10 text-brand-600 dark:text-brand-300 border-brand-500/30"
+              : driveBadgeClasses(status)
+          }`}
+          title={drive?.errorMessage ?? undefined}
+        >
+          {pending ? <Loader2 className="h-3 w-3 animate-spin" /> : <HardDrive className="h-3 w-3" />}
+          {pending ? "Wird in Google Drive gespeichert" : DRIVE_STATUS_LABELS[status]}
+        </span>
+
+        {drive?.webViewLink && (
+          <a
+            href={drive.webViewLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-1.5 py-0.5 text-[11px] text-[var(--muted)] transition hover:bg-[var(--background)] hover:text-[var(--foreground)]"
+          >
+            <ExternalLink className="h-3 w-3" /> In Google Drive öffnen
+          </a>
+        )}
+
+        {!pending && (
+          <button
+            type="button"
+            onClick={onRetry}
+            className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-1.5 py-0.5 text-[11px] text-[var(--muted)] transition hover:bg-[var(--background)] hover:text-[var(--foreground)]"
+            title="Drive-Ablage erneut versuchen"
+          >
+            <RotateCcw className="h-3 w-3" /> Drive erneut
+          </button>
+        )}
+
+        {!pending && done && (
+          <button
+            type="button"
+            onClick={onResort}
+            className="inline-flex items-center gap-1 rounded-md border border-[var(--border)] px-1.5 py-0.5 text-[11px] text-[var(--muted)] transition hover:bg-[var(--background)] hover:text-[var(--foreground)]"
+            title="Datei neu einsortieren"
+          >
+            <FolderInput className="h-3 w-3" /> Neu einsortieren
+          </button>
+        )}
+      </div>
+
+      {drive?.path && done && (
+        <div className="truncate text-[10px] text-[var(--muted)]" title={drive.path}>
+          {drive.path}
+        </div>
+      )}
+      {drive?.errorMessage && status === "failed" && (
+        <p className="text-[11px] text-red-500">{drive.errorMessage}</p>
+      )}
     </div>
   );
 }
