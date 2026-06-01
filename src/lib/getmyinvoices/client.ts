@@ -1,9 +1,11 @@
 /**
  * GetMyInvoices-API-Client (Accounts API v3, https://api.getmyinvoices.com).
  *
- * Auth: API-Key. Anders als ROLLER (OAuth) erwartet GMI den Key als JSON-Feld
- * `api_key` im POST-Body jeder Anfrage – es gibt keinen Token-Flow. Alle
- * Endpunkte sind POST + JSON, UTF-8.
+ * Auth: API-Key im HTTP-Header `X-API-KEY` (kein OAuth/Token-Flow). Die API ist
+ * RESTful (GET/POST/PUT/DELETE auf Ressourcen-Pfaden), UTF-8/JSON.
+ *   GET  apiStatus            → Status/Verbindungstest
+ *   GET  documents            → Rechnungen/Dokumente auflisten
+ *   POST documents            → neues Dokument hochladen (späterer E-Mail→GMI-Push)
  *
  * Nur serverseitig verwenden (der API-Key ist ein Secret!).
  */
@@ -13,32 +15,33 @@ export interface GmiCreds {
   apiKey: string;
 }
 
-type Json = Record<string, unknown>;
-
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * Authentifizierter Request gegen die GetMyInvoices-API. Sendet POST mit
- * JSON-Body `{ ...body, api_key }` und gibt das geparste JSON zurück.
- * Bei HTTP 429/5xx wird mit (exponentiellem) Backoff erneut versucht.
+ * Authentifizierter Request gegen die GetMyInvoices-API. Default GET; ein
+ * optionaler Body wird als JSON gesendet. Bei HTTP 429/5xx wird mit
+ * (exponentiellem) Backoff erneut versucht.
  */
 export async function gmiRequest<T = unknown>(
   creds: GmiCreds,
   path: string,
-  body: Json = {},
+  init: { method?: string; body?: unknown } = {},
 ): Promise<T> {
   const url = path.startsWith("http")
     ? path
     : `${creds.baseUrl.replace(/\/+$/, "")}/${path.replace(/^\/+/, "")}`;
-
-  const payload = JSON.stringify({ ...body, api_key: creds.apiKey });
+  const method = init.method ?? "GET";
 
   const maxRetries = 4;
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: payload,
+      method,
+      headers: {
+        "X-API-KEY": creds.apiKey,
+        Accept: "application/json",
+        ...(init.body != null ? { "Content-Type": "application/json" } : {}),
+      },
+      body: init.body != null ? JSON.stringify(init.body) : undefined,
       cache: "no-store",
     });
 
@@ -50,33 +53,21 @@ export async function gmiRequest<T = unknown>(
 
     const text = await res.text().catch(() => "");
     if (!res.ok) {
-      throw new Error(`GetMyInvoices POST ${path} → HTTP ${res.status} ${text.slice(0, 200)}`);
+      throw new Error(`GetMyInvoices ${method} ${path} → HTTP ${res.status} ${text.slice(0, 200)}`);
     }
     if (!text) return undefined as T;
     try {
       return JSON.parse(text) as T;
     } catch {
-      throw new Error(`GetMyInvoices POST ${path} → ungültige JSON-Antwort`);
+      throw new Error(`GetMyInvoices ${method} ${path} → ungültige JSON-Antwort`);
     }
   }
 }
 
 /**
- * Prüft die Verbindung über einen leichten Endpunkt (Länderliste). Wirft bei
- * ungültigem Key (HTTP 4xx). Gibt die Anzahl gelieferter Länder zurück.
+ * Prüft die Verbindung über den leichten Status-Endpunkt (GET apiStatus).
+ * Wirft bei ungültigem Key (HTTP 4xx).
  */
-export async function verifyConnection(creds: GmiCreds): Promise<{ countries: number }> {
-  const res = await gmiRequest<unknown>(creds, "/getCountries");
-  const list = extractRows(res);
-  return { countries: list.length };
-}
-
-/** Defensive Extraktion einer Liste aus den variierenden GMI-Antwortformen. */
-function extractRows(res: unknown): unknown[] {
-  if (Array.isArray(res)) return res;
-  const o = (res ?? {}) as Json;
-  for (const k of ["countries", "data", "items", "results", "records", "documents", "invoices"]) {
-    if (Array.isArray(o[k])) return o[k] as unknown[];
-  }
-  return [];
+export async function verifyConnection(creds: GmiCreds): Promise<void> {
+  await gmiRequest(creds, "apiStatus");
 }

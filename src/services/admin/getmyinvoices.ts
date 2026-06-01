@@ -78,7 +78,7 @@ export async function getGmiCreds(): Promise<GmiCreds | null> {
   return { baseUrl: data.base_url, apiKey: data.api_key };
 }
 
-/** Testet die Verbindung (POST /getCountries) und merkt sich den Zeitpunkt. */
+/** Testet die Verbindung (GET apiStatus) und merkt sich den Zeitpunkt. */
 export async function verifyGmiConnection(): Promise<{ ok: boolean; error?: string }> {
   await requireManage();
   const admin = createAdminClient();

@@ -6,7 +6,7 @@
 -- ROLLER). Genutzt wird sie, um später Rechnungen aus den HUB-E-Mails nach GMI
 -- zu übertragen (Import/Push).
 --
--- Auth: API-Key (POST-JSON-Feld `api_key`). Der Key liegt – wie die ROLLER-
+-- Auth: API-Key (HTTP-Header `X-API-KEY`). Der Key liegt – wie die ROLLER-
 -- Secrets – in einer streng abgeschotteten Tabelle: RLS aktiv OHNE Policies →
 -- Zugriff ausschließlich serverseitig über die Service-Role nach Permission-
 -- Prüfung (integrations.manage).
